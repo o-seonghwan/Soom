@@ -151,6 +151,7 @@ activemq-data/
 
 # Environments
 .env
+*.key
 .envrc
 .venv
 env/
@@ -158,6 +159,14 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# 대용량 데이터
+data/raw/
+data/processed/
+
+# 모델 파일
+*.pkl
+*.joblib
 
 # Spyder project settings
 .spyderproject
