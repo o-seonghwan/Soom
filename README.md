@@ -10,6 +10,8 @@
 - Git / GitHub
 
 ## 3. 폴더 구조
+```text
+team-project/
 │
 ├── README.md                   # 프로젝트 소개 및 실행 방법
 ├── .gitignore                  # 업로드 제외 규칙
@@ -22,7 +24,7 @@
 │   └── data_dictionary.md      # 컬럼 설명
 │
 ├── data/                       # 팀원 PC에서 사용하는 데이터 위치
-│   ├── raw/                    # 원본(깃 업로드 금지)
+│   ├── raw/                    # Drive에서 받은 원본(깃 업로드 금지)
 │   ├── processed/              # 전처리 결과(깃 업로드 금지)
 │   └── sample/                 # 작은 샘플(민감정보 없는 경우만 공유)
 │
@@ -43,6 +45,8 @@
 │
 └── reports/
     └── figures/               # 코드로 생성한 작은 분석 그래프
+```
+
 
 ## 4. 협업 규칙
 - 작업 시작 전 최신 main 확인
