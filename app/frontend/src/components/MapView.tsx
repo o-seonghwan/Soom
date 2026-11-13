@@ -104,6 +104,50 @@ function BoundaryFocus({
   return null;
 }
 
+// 강남구 바깥 영역을 가리는 마스크 생성
+function createOutsideMask(
+  boundary: GeoJsonObject
+): GeoJsonObject {
+  const geojson = L.geoJSON(boundary).toGeoJSON();
+
+  // 강남구 경계 좌표들을 마스크의 구멍으로 사용
+  const holes: number[][][] = [];
+
+  for (const feature of geojson.features) {
+    const geometry = feature.geometry;
+
+    if (!geometry) continue;
+
+    if (geometry.type === "Polygon") {
+      holes.push(geometry.coordinates[0]);
+    } else if (geometry.type === "MultiPolygon") {
+      for (const polygon of geometry.coordinates) {
+        holes.push(polygon[0]);
+      }
+    }
+  }
+
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: {
+      type: "Polygon",
+      coordinates: [
+        // 지도를 덮는 외부 사각형 (경도, 위도)
+        [
+          [-180, -85],
+          [180, -85],
+          [180, 85],
+          [-180, 85],
+          [-180, -85],
+        ],
+        // 강남구 부분은 구멍으로 제외
+        ...holes,
+      ],
+    },
+  };
+}
+
 const reportLabels: Record<Report["type"], string> = {
   smoking: "흡연 직접 목격",
   cigarette_butt: "담배꽁초 발견",
@@ -179,10 +223,10 @@ export default function MapView({
           height: "100%",
         }}
       >
-        {/* OpenStreetMap 지도 */}
         <TileLayer
-          attribution="&copy; OpenStreetMap contributors"
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+          url={`https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png?key=${import.meta.env.VITE_CARTO_API_KEY}`}
+          maxZoom={20}
         />
 
         <ZoomControl position="bottomright" />
@@ -195,16 +239,16 @@ export default function MapView({
         <BoundaryFocus boundary={boundary} />
 
         {/* 강남구 행정경계 */}
+        {/* 강남구 외부 블라인드 마스크 */}
         {boundary && (
           <GeoJSON
-            data={boundary}
+            data={createOutsideMask(boundary)}
             interactive={false}
             style={{
-              color: "#2563eb",
-              weight: 4,
-              opacity: 0.95,
-              fillOpacity: 0,
-              dashArray: undefined,
+              stroke: false,
+              fillColor: "#64748b",
+              fillOpacity: 0.6,
+              fillRule: "evenodd",
             }}
           />
         )}
@@ -359,9 +403,9 @@ export default function MapView({
           </span>
         ) : boundary ? (
           <div className="flex items-center gap-2">
-            <span className="h-1 w-6 rounded bg-blue-600" />
+            <span className="h-3 w-3 rounded-sm bg-slate-500/60" />
             <span className="font-semibold text-gray-700">
-              강남구 행정경계
+              강남구 서비스 지역
             </span>
           </div>
         ) : (
