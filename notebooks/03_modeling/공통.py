@@ -4,7 +4,7 @@
 - 직접 실행하지 않아도 됩니다. (1번 코드를 처음 실행하면 특성표를 만들어 저장해 두고, 다음부터는 저장본을 씀)
 
 데이터 위치
-- 기본 원본 폴더는 저장소의 data/raw입니다. 다른 폴더는 LUNG_DATA_ROOT로 지정하세요.
+- 기본 데이터 폴더는 저장소의 data/raw입니다. 다른 폴더는 LUNG_DATA_ROOT로 지정하세요.
 - 같은 이름 파일이 여러 곳에 있으면 'eda 완료' 폴더 안의 파일을 먼저 씁니다.
 - VWorld 키는 .env 의 VWORLD_API_KEY 를 읽습니다. 키는 화면·파일 어디에도 출력하지 않습니다.
 """
@@ -22,7 +22,9 @@ GU_NAME, GU_CODE = "강남구", "11680"
 RAW_OUT_DIR = Path(os.environ.get("LUNG_OUT_DIR", str(REPO_ROOT / "data" / "processed" / "결과"))).resolve()
 OUT_DIR = str(RAW_OUT_DIR)
 EDA_OUT_DIR = RAW_OUT_DIR / "전처리기반"
-TRAINING_DATA_PATH = EDA_OUT_DIR / "1_학습데이터.joblib"
+TRAINING_DATA_PATH = EDA_OUT_DIR / "1_학습용_지점_21m.csv"
+TRAINING_HOURLY_PATH = EDA_OUT_DIR / "특성_강남구" / "격자_시간대별_생활인구.csv"
+VALIDATE_OTHER_GU = None   # 마포 외부 검증을 실행하려면 ("마포구", "11440")로 변경
 EDA_ROOT = None
 CRS_M = 5179               # 미터 단위 좌표계 (생활인구 250m 격자 기준)
 SEED = 42
@@ -30,7 +32,11 @@ SEED = 42
 USE_VWORLD = True          # .env 에 키가 있으면 VWorld로 꽁초 적발 장소 좌표를 찾음 (없으면 로컬 방식만)
 LIVEPOP_HOURS = [15, 16, 17, 18]   # 특성용 생활인구 시간대 평균 (15~19시)
 R_NEAR, R_MID = 50, 100    # 개수를 셀 반경(m)
-LABEL_R = 50               # 정답: 꽁초 적발 장소에서 50m 안의 걷는 길 지점 = 1
+LABEL_R = 21               # 정답: 꽁초 적발 장소 21m 이내의 보행 지점 = 1
+HIGH_R, MEDIUM_R = 10, 15
+DISTANCE_RISK_LEVELS = ["고위험", "중위험", "저위험", "범위 밖"]
+LABEL_COUNT_COLUMN = f"적발건수_{LABEL_R}m"
+LABEL_DETAIL_COLUMNS = ["최근접_적발거리_m", "적발거리_위험등급", LABEL_COUNT_COLUMN]
 MIN_WALK_M, MIN_GU_SHARE = 400, 0.5   # 분석 대상 격자: 보행로 400m 이상, 구 보행로 비율 50% 이상
 MAIN_ROAD_TOP, ALLEY_BOTTOM, ALLEY_INTO_M, BTW_SAMPLES = 0.15, 0.50, 10, 600
 BIZ_USES = ["업무시설", "판매시설", "제1종근린생활시설", "제2종근린생활시설"]
@@ -669,15 +675,54 @@ def model_features(df):
     return [c for c in FEATURES if c in df.columns and c not in LEAK]
 
 
-def label_nodes(nodes, places, r=LABEL_R):
-    """걷는 길 지점이 꽁초 적발 장소에서 r m 안이면 1. 적발건수 합도 같이 반환"""
+def prepare_classifier(classifier, scale=False):
+    """모델의 fit에 전달된 학습 행으로만 결측값과 표준화 기준을 계산한다."""
+    from sklearn.impute import SimpleImputer
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    imputer = SimpleImputer(strategy="median", keep_empty_features=True).set_output(transform="pandas")
+    scaler = StandardScaler().set_output(transform="pandas") if scale else "passthrough"
+    return make_pipeline(imputer, scaler, classifier)
+
+
+def label_nodes(nodes, places):
+    """가장 가까운 적발 장소까지의 거리로 정답과 거리 등급을 만든다."""
     from scipy.spatial import cKDTree
-    P = places.dropna(subset=["위도"])
-    t = cKDTree(xy_m(nodes["위도"], nodes["경도"]))
-    y = np.zeros(len(nodes), int); n = np.zeros(len(nodes))
-    for idx, c in zip(t.query_ball_point(xy_m(P["위도"], P["경도"]), r), P["적발건수"]):
-        y[idx] = 1; n[idx] += c
-    return y, n
+
+    located = places.dropna(subset=["위도", "경도"])
+    if located.empty:
+        raise ValueError("정답을 만들 수 있는 꽁초 적발 장소 좌표가 없습니다.")
+    node_xy = xy_m(nodes["위도"], nodes["경도"])
+    place_xy = xy_m(located["위도"], located["경도"])
+    distance, _ = cKDTree(place_xy).query(node_xy)
+    levels = pd.cut(distance, [-np.inf, HIGH_R, MEDIUM_R, LABEL_R, np.inf],
+                    labels=DISTANCE_RISK_LEVELS)
+
+    counts = np.zeros(len(nodes))
+    nearby = cKDTree(node_xy).query_ball_point(place_xy, LABEL_R)
+    for indices, count in zip(nearby, located["적발건수"]):
+        counts[indices] += count
+
+    return pd.DataFrame({
+        "정답": (distance <= LABEL_R).astype(int),
+        "최근접_적발거리_m": distance,
+        "적발거리_위험등급": levels,
+        LABEL_COUNT_COLUMN: counts,
+    }, index=nodes.index)
+
+
+def summarize_distance_risk(data):
+    counts = data["적발거리_위험등급"].value_counts().reindex(DISTANCE_RISK_LEVELS, fill_value=0)
+    return pd.DataFrame({
+        "최근접 적발 거리": [
+            f"{HIGH_R}m 이내", f"{HIGH_R}m 초과~{MEDIUM_R}m 이내",
+            f"{MEDIUM_R}m 초과~{LABEL_R}m 이내", f"{LABEL_R}m 초과",
+        ],
+        "적발거리_위험등급": DISTANCE_RISK_LEVELS,
+        "정답": [1, 1, 1, 0],
+        "지점수": counts.to_numpy(),
+    })
 
 
 def spatial_blocks(nodes, size=1000):
@@ -690,13 +735,14 @@ def top_capture(y, s, k=0.10):
     return np.asarray(y)[o].sum() / max(1, np.asarray(y).sum())
 
 
-def save_risk_maps(df, hourly, FE, p, cv_predictions):
+def save_risk_maps(df, hourly, FE, p, test_predictions):
     """모델 예측을 기존 보행 지점·시간대별 격자 CSV 형식으로 저장한다."""
     df["위험확률"] = p.round(4)
     df["위험점수"] = (pd.Series(p).rank(pct=True) * 100).round(1)          # 강남구 안 순위(0~100)
     df["위험등급"] = pd.cut(df["위험점수"], [-1, 50, 70, 90, 100], labels=["보통", "약간 높음", "높음", "매우 높음(상위10%)"])
-    df["교차검증_예측"] = cv_predictions.round(4)                                 # 학습에 안 쓴 블록에서 나온 예측(검증용)
-    keep = ["노드 ID", "격자ID", "위도", "경도", "위험확률", "위험점수", "위험등급", "교차검증_예측", "정답", "적발건수_50m"] + FE
+    df["시험셋_예측"] = test_predictions.round(4)
+    keep = ["노드 ID", "격자ID", "위도", "경도", "위험확률", "위험점수", "위험등급", "시험셋_예측", "정답"]
+    keep += LABEL_DETAIL_COLUMNS + FE
     save(df[keep], "1_위험지도_지점.csv")
 
     # ── 시간대별 격자 위험: 격자 평균 위험점수 × (그 시간 생활인구 / 하루 최대 생활인구) ──

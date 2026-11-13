@@ -33,34 +33,17 @@ HOTSPOT_COLUMNS = ["집중지", "적발건수", "장소수", "중심_위도", "�
 BOOTH_COLUMNS = ["가까운어린이집", "어린이집까지_m", "판단", "부스후보_위도", "부스후보_경도", "집중지에서_m"]
 
 
-def main():
-    print("<꽁초 적발 데이터 불러오기>")
-    print(SEPARATOR)
-    C.use_preprocessed_data()
-    rec = C.butt_records_with_xy().dropna(subset=["위도", "경도"]).copy()
-    if rec.empty:
-        raise ValueError("군집 분석에 사용할 강남구 꽁초 적발 좌표가 없습니다.")
-    print(rec[["위도", "경도", "일시"]].head())
-    print(f"좌표 있는 꽁초 적발 기록 {len(rec):,}건")
-    print(SEPARATOR, end=end)
-
-    print("\n<DBSCAN으로 꽁초 적발 집중지 찾기>")
-    print(SEPARATOR)
+def group_locations(rec):
     # 같은 장소 기록은 좌표가 같으므로 장소별로 묶고 건수를 가중치로 씀
-    pl = rec.groupby(["위도", "경도"]).agg(건수=("장소", "size"), 대표장소=("장소", lambda s: s.value_counts().index[0])).reset_index()
+    return rec.groupby(["위도", "경도"]).agg(건수=("장소", "size"), 대표장소=("장소", lambda s: s.value_counts().index[0])).reset_index()
+
+
+def cluster_locations(locations, rec, eps_m, min_records):
+    pl = locations.copy()
     X = C.xy_m(pl["위도"], pl["경도"])
-    model = DBSCAN(eps=EPS_M, min_samples=MIN_RECORDS)
+    model = DBSCAN(eps=eps_m, min_samples=min_records)
     model.fit(X, sample_weight=pl["건수"])
     pl["집중지"] = model.labels_
-    noise = pl["집중지"] == -1
-    n_clusters = pl.loc[~noise, "집중지"].nunique()
-    n_noise = pl.loc[noise, "건수"].sum()
-    print(f"반경 {EPS_M}m | 최소 {MIN_RECORDS}건 | 집중지 {n_clusters}곳")
-    print(f"집중지 밖 기록 {n_noise:,}건")
-    print(SEPARATOR, end=end)
-
-    print("\n<집중지별 적발 건수와 중심 좌표>")
-    print(SEPARATOR)
     rec = rec.merge(pl[["위도", "경도", "집중지"]], on=["위도", "경도"])
     rec["시"] = rec["일시"].dt.hour
     rows = []
@@ -79,17 +62,10 @@ def main():
             "반경_m": round(radius, 1),
         })
     H = pd.DataFrame(rows, columns=HOTSPOT_COLUMNS).sort_values("적발건수", ascending=False)
-    C.save(pl, "4_흡연집중지_DBSCAN.csv")
-    print(H.head(5).to_string(index=False))
-    print(SEPARATOR, end=end)
-    if H.empty:
-        C.save(pd.DataFrame(columns=HOTSPOT_COLUMNS + BOOTH_COLUMNS), "4_흡연부스_후보.csv")
-        print("설정한 기준에서 집중지가 없어 부스 후보를 탐색하지 않았습니다.")
-        return
+    return pl, H
 
-    # 금지·배려 대상 (2번 코드와 같은 자료)
-    print("\n<보행 지점에서 흡연부스 검토 후보 찾기>")
-    print(SEPARATOR)
+
+def prepare_booth_search():
     target_script = Path(__file__).with_name("2_B2C_흡연자_여기서피워도되나요.py")
     spec = importlib.util.spec_from_file_location("smoking_targets", target_script)
     q2 = importlib.util.module_from_spec(spec)
@@ -114,6 +90,11 @@ def main():
     ct = cKDTree(C.xy_m(care["위도"], care["경도"]))
     nt = cKDTree(NP[ok])
     Nok = N[ok].reset_index(drop=True)
+    return missing, care, ct, nt, Nok
+
+
+def find_booth_candidates(H, search):
+    missing, care, ct, nt, Nok = search
     out = []
     for _, h in H.iterrows():
         c = C.xy_m([h["중심_위도"]], [h["중심_경도"]])[0]
@@ -135,6 +116,44 @@ def main():
             rowo["판단"] = f"직선 {BOOTH_SEARCH_M}m 이내 검토 후보 없음"
         out.append(rowo)
     B = pd.DataFrame(out, columns=HOTSPOT_COLUMNS + BOOTH_COLUMNS)
+    return B
+
+
+def main():
+    print("<꽁초 적발 데이터 불러오기>")
+    print(SEPARATOR)
+    C.use_preprocessed_data()
+    rec = C.butt_records_with_xy().dropna(subset=["위도", "경도"]).copy()
+    if rec.empty:
+        raise ValueError("군집 분석에 사용할 강남구 꽁초 적발 좌표가 없습니다.")
+    print(rec[["위도", "경도", "일시"]].head())
+    print(f"좌표 있는 꽁초 적발 기록 {len(rec):,}건")
+    print(SEPARATOR, end=end)
+
+    print("\n<DBSCAN으로 꽁초 적발 집중지 찾기>")
+    print(SEPARATOR)
+    pl, H = cluster_locations(group_locations(rec), rec, EPS_M, MIN_RECORDS)
+    noise = pl["집중지"] == -1
+    n_clusters = pl.loc[~noise, "집중지"].nunique()
+    n_noise = pl.loc[noise, "건수"].sum()
+    print(f"반경 {EPS_M}m | 최소 {MIN_RECORDS}건 | 집중지 {n_clusters}곳")
+    print(f"집중지 밖 기록 {n_noise:,}건")
+    print(SEPARATOR, end=end)
+
+    print("\n<집중지별 적발 건수와 중심 좌표>")
+    print(SEPARATOR)
+    C.save(pl, "4_흡연집중지_DBSCAN.csv")
+    print(H.head(5).to_string(index=False))
+    print(SEPARATOR, end=end)
+    if H.empty:
+        C.save(pd.DataFrame(columns=HOTSPOT_COLUMNS + BOOTH_COLUMNS), "4_흡연부스_후보.csv")
+        print("설정한 기준에서 집중지가 없어 부스 후보를 탐색하지 않았습니다.")
+        return
+
+    # 금지·배려 대상 (2번 코드와 같은 자료)
+    print("\n<보행 지점에서 흡연부스 검토 후보 찾기>")
+    print(SEPARATOR)
+    B = find_booth_candidates(H, prepare_booth_search())
     C.save(B, "4_흡연부스_후보.csv")
     print("\n" + B["판단"].value_counts().to_string())
     print("\n적발 많은 집중지 상위 10\n" + B.head(10)[["대표장소", "적발건수", "가장많은시간", "판단", "집중지에서_m", "어린이집까지_m"]].to_string(index=False))
