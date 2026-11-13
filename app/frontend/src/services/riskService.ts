@@ -1,24 +1,37 @@
 
 import type { RiskLocation } from "../types/risk";
-import { mockRisks } from "../mocks/mockRisks";
 
-// 추후 FastAPI 서버 주소
+// =====================================================
+// 1. API 서버 설정
+// =====================================================
+
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+  import.meta.env.VITE_API_BASE_URL ??
+  "http://localhost:8000";
 
-// 개발 단계에서는 Mock 데이터 사용
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
+
+// =====================================================
+// 2. 위치별 위험도 조회
+// =====================================================
 
 export async function getRisks(): Promise<RiskLocation[]> {
-  if (USE_MOCK) {
-    return mockRisks;
-  }
-
-  const response = await fetch(`${API_BASE_URL}/api/risks`);
+  const response = await fetch(
+    `${API_BASE_URL}/api/risks`
+  );
 
   if (!response.ok) {
-    throw new Error(`위험도 조회 실패: ${response.status}`);
+    throw new Error(
+      `위험도 조회 실패: ${response.status}`
+    );
   }
 
-  return (await response.json()) as RiskLocation[];
+  const data: unknown = await response.json();
+
+  if (!Array.isArray(data)) {
+    throw new Error(
+      "위험도 API 응답 형식이 올바르지 않습니다."
+    );
+  }
+
+  return data as RiskLocation[];
 }

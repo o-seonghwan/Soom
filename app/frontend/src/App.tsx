@@ -1,10 +1,11 @@
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import MapView from "./components/MapView";
 import RiskLegend from "./components/RiskLegend";
 import ReportForm from "./components/ReportForm";
 import AdminDashboard from "./components/AdminDashboard";
+import RoutePanel from "./components/RoutePanel";
 
 import type {
   Coordinate,
@@ -13,7 +14,10 @@ import type {
 } from "./types/route";
 
 import type { RiskLocation } from "./types/risk";
-import type { Report, ReportRequest } from "./types/report";
+import type {
+  Report,
+  ReportRequest,
+} from "./types/report";
 
 import { getRoutes } from "./services/routeService";
 import { getRisks } from "./services/riskService";
@@ -22,23 +26,43 @@ import {
   createReport,
 } from "./services/reportService";
 
-type SelectionMode = "start" | "end" | "report";
+
 type PageMode = "route" | "report" | "admin";
+type LocationMode = "start" | "end";
 type SearchStatus = "idle" | "success" | "error";
 
-function formatCoordinate(point: Coordinate | null): string {
+
+// =========================================
+// 1. 좌표 보조 함수
+// =========================================
+
+function formatCoordinate(
+  point: Coordinate | null
+): string {
   if (!point) return "";
-  return `${point[0].toFixed(6)}, ${point[1].toFixed(6)}`;
+
+  return (
+    `${point[0].toFixed(6)}, ` +
+    `${point[1].toFixed(6)}`
+  );
 }
 
-function parseCoordinate(value: string): Coordinate | null {
-  const parts = value.split(",");
 
-  if (parts.length !== 2) return null;
-  if (!parts[0].trim() || !parts[1].trim()) return null;
+function parseCoordinate(
+  text: string
+): Coordinate | null {
+  const values = text.split(",");
 
-  const lat = Number(parts[0].trim());
-  const lng = Number(parts[1].trim());
+  if (values.length !== 2) {
+    return null;
+  }
+
+  if (!values[0].trim() || !values[1].trim()) {
+    return null;
+  }
+
+  const lat = Number(values[0].trim());
+  const lng = Number(values[1].trim());
 
   if (
     !Number.isFinite(lat) ||
@@ -54,23 +78,28 @@ function parseCoordinate(value: string): Coordinate | null {
   return [lat, lng];
 }
 
+
+// =========================================
+// 2. 메인 컴포넌트
+// =========================================
+
 export default function App() {
-  // =====================================================
-  // 1. 화면 및 지도 설정
-  // =====================================================
+  // ---------------------------------------
+  // 페이지 및 지도 상태
+  // ---------------------------------------
 
   const [pageMode, setPageMode] =
     useState<PageMode>("route");
 
   const [selectionMode, setSelectionMode] =
-    useState<SelectionMode>("start");
+    useState<LocationMode>("start");
 
   const [focusPoint, setFocusPoint] =
     useState<Coordinate | null>(null);
 
-  // =====================================================
-  // 2. 출발지 및 목적지
-  // =====================================================
+  // ---------------------------------------
+  // 경로 입력 상태
+  // ---------------------------------------
 
   const [start, setStart] =
     useState<Coordinate | null>(null);
@@ -81,49 +110,54 @@ export default function App() {
   const [startText, setStartText] = useState("");
   const [endText, setEndText] = useState("");
 
-  // =====================================================
-  // 3. 경로 탐색 및 소요 시간
-  // =====================================================
-
-  const [routes, setRoutes] = useState<Route[]>([]);
-
-  const [level, setLevel] =
+  const [avoidanceLevel, setAvoidanceLevel] =
     useState<RouteRequest["avoidanceLevel"]>("medium");
 
-  const [loading, setLoading] = useState(false);
+  // ---------------------------------------
+  // 경로 탐색 상태
+  // ---------------------------------------
 
-  const [elapsedSeconds, setElapsedSeconds] =
-    useState(0);
+  const [routes, setRoutes] =
+    useState<Route[]>([]);
+
+  const [loading, setLoading] = useState(false);
 
   const [searchStatus, setSearchStatus] =
     useState<SearchStatus>("idle");
 
-  const searchStartTime = useRef<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] =
+    useState(0);
+
+  const searchStartTime =
+    useRef<number | null>(null);
+
   const searchInProgress = useRef(false);
 
-  // =====================================================
-  // 4. 위험도 데이터
-  // =====================================================
+  // ---------------------------------------
+  // 위험도 데이터
+  // ---------------------------------------
 
   const [risks, setRisks] =
     useState<RiskLocation[]>([]);
 
-  const [showRisks, setShowRisks] = useState(true);
-  const [riskLoading, setRiskLoading] = useState(true);
+  const [riskLoading, setRiskLoading] =
+    useState(true);
 
   const [riskError, setRiskError] =
     useState<string | null>(null);
 
-  // =====================================================
-  // 5. 사용자 제보
-  // =====================================================
+  const [showRisks, setShowRisks] =
+    useState(true);
 
-  const [reports, setReports] = useState<Report[]>([]);
+  // ---------------------------------------
+  // 공개 제보 데이터
+  // ---------------------------------------
+
+  const [reports, setReports] =
+    useState<Report[]>([]);
 
   const [reportLocation, setReportLocation] =
     useState<Coordinate | null>(null);
-
-  const [showReports, setShowReports] = useState(true);
 
   const [reportSubmitting, setReportSubmitting] =
     useState(false);
@@ -131,27 +165,58 @@ export default function App() {
   const [reportError, setReportError] =
     useState<string | null>(null);
 
-  // =====================================================
-  // 6. 위험도 및 제보 데이터 조회
-  // =====================================================
+  const [reportNotice, setReportNotice] =
+    useState<string | null>(null);
+
+  const [showReports, setShowReports] =
+    useState(true);
+
+
+  // =======================================
+  // 3. 공개 제보 목록 재조회
+  // =======================================
+
+  const refreshPublicReports = useCallback(
+    async (): Promise<void> => {
+      try {
+        const data = await getReports();
+
+        setReports(data);
+        setReportError(null);
+      } catch (error) {
+        console.error("공개 제보 조회 실패:", error);
+
+        setReportError(
+          "공개 제보 목록을 불러오지 못했습니다."
+        );
+      }
+    },
+    []
+  );
+
+
+  // =======================================
+  // 4. 최초 위험도 및 공개 제보 로드
+  // =======================================
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadData() {
+    async function loadInitialData() {
       try {
-        const data = await getRisks();
+        const riskData = await getRisks();
 
         if (!cancelled) {
-          setRisks(data);
+          setRisks(riskData);
           setRiskError(null);
         }
       } catch (error) {
-        console.error(error);
+        console.error("위험도 조회 실패:", error);
 
         if (!cancelled) {
-          setRisks([]);
-          setRiskError("위험도 조회에 실패했습니다.");
+          setRiskError(
+            "위험도 데이터를 불러오지 못했습니다."
+          );
         }
       } finally {
         if (!cancelled) {
@@ -160,33 +225,34 @@ export default function App() {
       }
 
       try {
-        const data = await getReports();
+        const reportData = await getReports();
 
         if (!cancelled) {
-          setReports(data);
+          setReports(reportData);
           setReportError(null);
         }
       } catch (error) {
-        console.error(error);
+        console.error("제보 조회 실패:", error);
 
         if (!cancelled) {
           setReportError(
-            "제보 목록을 불러오지 못했습니다."
+            "공개 제보 목록을 불러오지 못했습니다."
           );
         }
       }
     }
 
-    void loadData();
+    void loadInitialData();
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // =====================================================
-  // 7. 실시간 경로 탐색 시간 측정
-  // =====================================================
+
+  // =======================================
+  // 5. 실시간 경로 탐색 시간 측정
+  // =======================================
 
   useEffect(() => {
     if (!loading) return;
@@ -194,8 +260,8 @@ export default function App() {
     const timer = window.setInterval(() => {
       if (searchStartTime.current !== null) {
         setElapsedSeconds(
-          (performance.now() - searchStartTime.current)
-          / 1000
+          (performance.now() -
+            searchStartTime.current) / 1000
         );
       }
     }, 100);
@@ -205,9 +271,10 @@ export default function App() {
     };
   }, [loading]);
 
-  // =====================================================
-  // 8. 기존 경로 탐색 결과 초기화
-  // =====================================================
+
+  // =======================================
+  // 6. 경로 결과 초기화
+  // =======================================
 
   function clearSearchResult() {
     setRoutes([]);
@@ -218,12 +285,13 @@ export default function App() {
     }
   }
 
-  // =====================================================
-  // 9. 출발지 및 목적지 변경
-  // =====================================================
+
+  // =======================================
+  // 7. 출발지 또는 목적지 설정
+  // =======================================
 
   function updateLocation(
-    mode: "start" | "end",
+    mode: LocationMode,
     point: Coordinate
   ) {
     if (mode === "start") {
@@ -238,22 +306,26 @@ export default function App() {
     clearSearchResult();
   }
 
-  // =====================================================
-  // 10. 지도 클릭 처리
-  // =====================================================
+
+  // =======================================
+  // 8. 지도 클릭
+  // =======================================
 
   function handleMapClick(point: Coordinate) {
-    if (pageMode === "admin") return;
+    if (pageMode === "admin") {
+      return;
+    }
 
     if (pageMode === "report") {
       setReportLocation(point);
       setFocusPoint([...point]);
+      setReportNotice(null);
       return;
     }
 
-    // 탐색 중 좌표 변경 방지
-    if (searchInProgress.current) return;
-    if (selectionMode === "report") return;
+    if (searchInProgress.current) {
+      return;
+    }
 
     updateLocation(selectionMode, point);
 
@@ -262,41 +334,55 @@ export default function App() {
     }
   }
 
-  // =====================================================
-  // 11. 좌표 직접 입력
-  // =====================================================
 
-  function applyCoordinate(mode: "start" | "end") {
-    if (searchInProgress.current) return;
+  // =======================================
+  // 9. 직접 입력 좌표 적용
+  // =======================================
+
+  function applyCoordinate(mode: LocationMode) {
+    if (searchInProgress.current) {
+      return;
+    }
 
     const text =
-      mode === "start" ? startText : endText;
+      mode === "start"
+        ? startText
+        : endText;
 
     const point = parseCoordinate(text);
 
     if (!point) {
-      alert("좌표를 '위도, 경도' 형식으로 입력하세요.");
+      window.alert(
+        "좌표를 '위도, 경도' 형식으로 입력하세요."
+      );
       return;
     }
 
     updateLocation(mode, point);
   }
 
-  // =====================================================
-  // 12. 현재 위치를 출발지로 설정
-  // =====================================================
+
+  // =======================================
+  // 10. 현재 위치를 출발지로 설정
+  // =======================================
 
   function useCurrentLocation() {
-    if (searchInProgress.current) return;
+    if (searchInProgress.current) {
+      return;
+    }
 
     if (!navigator.geolocation) {
-      alert("현재 위치 기능을 지원하지 않습니다.");
+      window.alert(
+        "현재 위치 기능을 지원하지 않습니다."
+      );
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        if (searchInProgress.current) return;
+        if (searchInProgress.current) {
+          return;
+        }
 
         const point: Coordinate = [
           position.coords.latitude,
@@ -307,8 +393,11 @@ export default function App() {
         setSelectionMode("end");
       },
       (error) => {
-        console.error(error);
-        alert("현재 위치 확인에 실패했습니다.");
+        console.error("위치 조회 오류:", error);
+
+        window.alert(
+          "현재 위치 확인에 실패했습니다."
+        );
       },
       {
         enableHighAccuracy: true,
@@ -318,12 +407,17 @@ export default function App() {
     );
   }
 
-  // =====================================================
-  // 13. 실제 A* 경로 탐색
-  // =====================================================
+
+  // =======================================
+  // 11. A* 경로 탐색
+  // =======================================
 
   async function handleSearch() {
-    if (!start || !end || searchInProgress.current) {
+    if (
+      !start ||
+      !end ||
+      searchInProgress.current
+    ) {
       return;
     }
 
@@ -339,41 +433,45 @@ export default function App() {
       const result = await getRoutes({
         start,
         end,
-        avoidanceLevel: level,
+        avoidanceLevel,
       });
 
       setRoutes(result.routes);
       setSearchStatus("success");
     } catch (error) {
-      console.error(error);
+      console.error("경로 탐색 오류:", error);
+
       setSearchStatus("error");
 
-      alert(
+      window.alert(
         error instanceof Error
           ? error.message
-          : "경로를 불러오지 못했습니다."
+          : "경로 탐색에 실패했습니다."
       );
     } finally {
       if (searchStartTime.current !== null) {
-        const totalTime =
-          (performance.now() - searchStartTime.current)
-          / 1000;
-
-        setElapsedSeconds(totalTime);
+        setElapsedSeconds(
+          (performance.now() -
+            searchStartTime.current) / 1000
+        );
       }
 
       searchStartTime.current = null;
       searchInProgress.current = false;
+
       setLoading(false);
     }
   }
 
-  // =====================================================
-  // 14. 경로 초기화
-  // =====================================================
+
+  // =======================================
+  // 12. 경로 초기화
+  // =======================================
 
   function resetRoute() {
-    if (searchInProgress.current) return;
+    if (searchInProgress.current) {
+      return;
+    }
 
     setStart(null);
     setEnd(null);
@@ -381,51 +479,71 @@ export default function App() {
     setStartText("");
     setEndText("");
 
-    clearSearchResult();
-
     setFocusPoint(null);
     setSelectionMode("start");
+
+    clearSearchResult();
   }
 
-  // =====================================================
-  // 15. 페이지 전환
-  // =====================================================
+
+  // =======================================
+  // 13. 페이지 전환
+  // =======================================
 
   function changePage(mode: PageMode) {
     setPageMode(mode);
     setReportLocation(null);
+    setReportNotice(null);
 
-    if (mode === "report") {
-      setSelectionMode("report");
-    } else {
+    if (mode === "route") {
       setSelectionMode(start ? "end" : "start");
+    }
+
+    // 공개 목록은 관리자 검토 후 또는 화면 전환 시 갱신
+    if (mode === "route" || mode === "report") {
+      void refreshPublicReports();
     }
   }
 
-  // =====================================================
-  // 16. 사용자 제보 등록
-  // =====================================================
+
+  // =======================================
+  // 14. 사용자 제보 등록
+  // =======================================
 
   async function handleCreateReport(
     request: ReportRequest
   ): Promise<boolean> {
-    if (reportSubmitting) return false;
+    if (reportSubmitting) {
+      return false;
+    }
 
     setReportSubmitting(true);
     setReportError(null);
+    setReportNotice(null);
 
     try {
-      const saved = await createReport(request);
+      // PostgreSQL에 pending 상태로 저장
+      await createReport(request);
 
-      setReports((current) => [...current, saved]);
       setReportLocation(null);
 
-      alert("프로토타입 제보가 등록되었습니다.");
+      setReportNotice(
+        "제보가 등록되어 관리자 검토를 기다리고 있습니다."
+      );
+
+      // 등록 직후에도 공개 목록 정책을 유지
+      // pending 제보를 지도에 직접 추가하지 않음
+      await refreshPublicReports();
 
       return true;
     } catch (error) {
-      console.error(error);
-      setReportError("제보 등록에 실패했습니다.");
+      console.error("제보 등록 오류:", error);
+
+      setReportError(
+        error instanceof Error
+          ? error.message
+          : "제보 등록에 실패했습니다."
+      );
 
       return false;
     } finally {
@@ -433,23 +551,34 @@ export default function App() {
     }
   }
 
-  // =====================================================
-  // 17. 관리자 화면에서 위치 확인
-  // =====================================================
+
+  // =======================================
+  // 15. 관리자 지도 위치 이동
+  // =======================================
 
   function focusReportLocation(point: Coordinate) {
     setFocusPoint([...point]);
     setShowReports(true);
   }
 
-  // =====================================================
-  // 18. 화면 렌더링
-  // =====================================================
+
+  // =======================================
+  // 16. 관리자 검토 후 공개 제보 재조회
+  // =======================================
+
+  async function handleReviewCompleted() {
+    await refreshPublicReports();
+  }
+
+
+  // =======================================
+  // 17. 화면
+  // =======================================
 
   return (
     <div className="flex h-dvh flex-col bg-white">
 
-      {/* 상단 헤더 */}
+      {/* 기존 헤더 유지 */}
       <header className="z-[1000] bg-white px-5 py-4 shadow-sm">
         <h1 className="text-xl font-bold text-green-700">
           폐(Lung) 끼치지 마세요
@@ -475,18 +604,18 @@ export default function App() {
           onMapClick={handleMapClick}
         />
 
-        {showRisks && !riskLoading && !riskError && (
-          <RiskLegend />
-        )}
+        {showRisks &&
+          !riskLoading &&
+          !riskError && <RiskLegend />}
       </main>
 
-      {/* 하단 기능 패널 */}
+      {/* 하단 패널 */}
       <section className="z-[1000] max-h-[55dvh] overflow-y-auto bg-white p-4 shadow-lg">
 
-        {/* 페이지 전환 */}
+        {/* 탭 전환 */}
         <div className="mb-4 grid grid-cols-3 gap-2">
-
           <button
+            type="button"
             onClick={() => changePage("route")}
             className={`rounded-lg p-3 text-sm font-bold ${
               pageMode === "route"
@@ -498,6 +627,7 @@ export default function App() {
           </button>
 
           <button
+            type="button"
             onClick={() => changePage("report")}
             className={`rounded-lg p-3 text-sm font-bold ${
               pageMode === "report"
@@ -509,6 +639,7 @@ export default function App() {
           </button>
 
           <button
+            type="button"
             onClick={() => changePage("admin")}
             className={`rounded-lg p-3 text-sm font-bold ${
               pageMode === "admin"
@@ -518,322 +649,77 @@ export default function App() {
           >
             관리자
           </button>
-
         </div>
 
-        {/* ========================================= */}
-        {/* 경로 탐색 화면 */}
-        {/* ========================================= */}
-
-        {pageMode === "route" ? (
-          <div className="space-y-3">
-
-            <p className="text-sm text-gray-600">
-              지도 선택 모드:{" "}
-              <strong className="text-green-700">
-                {selectionMode === "start"
-                  ? "출발지"
-                  : "목적지"}
-              </strong>
-            </p>
-
-            {/* 출발지 */}
-            <div className="space-y-1">
-              <label
-                htmlFor="start-coordinate"
-                className="text-sm font-bold"
-              >
-                출발지
-              </label>
-
-              <div className="flex flex-wrap gap-2">
-                <input
-                  id="start-coordinate"
-                  type="text"
-                  value={startText}
-                  disabled={loading}
-                  onChange={(e) =>
-                    setStartText(e.target.value)
-                  }
-                  placeholder="위도, 경도"
-                  className="min-w-0 flex-1 rounded-lg border p-3 text-sm"
-                />
-
-                <button
-                  disabled={loading}
-                  onClick={() => applyCoordinate("start")}
-                  className="rounded-lg bg-gray-100 px-3 text-sm disabled:opacity-50"
-                >
-                  적용
-                </button>
-
-                <button
-                  disabled={loading}
-                  onClick={() => setSelectionMode("start")}
-                  className={`rounded-lg px-3 text-sm disabled:opacity-50 ${
-                    selectionMode === "start"
-                      ? "bg-green-600 text-white"
-                      : "bg-green-100 text-green-800"
-                  }`}
-                >
-                  지도 선택
-                </button>
-
-                <button
-                  disabled={loading}
-                  onClick={useCurrentLocation}
-                  className="rounded-lg border px-3 text-sm disabled:opacity-50"
-                >
-                  현재 위치
-                </button>
-              </div>
-            </div>
-
-            {/* 목적지 */}
-            <div className="space-y-1">
-              <label
-                htmlFor="end-coordinate"
-                className="text-sm font-bold"
-              >
-                목적지
-              </label>
-
-              <div className="flex flex-wrap gap-2">
-                <input
-                  id="end-coordinate"
-                  type="text"
-                  value={endText}
-                  disabled={loading}
-                  onChange={(e) =>
-                    setEndText(e.target.value)
-                  }
-                  placeholder="위도, 경도"
-                  className="min-w-0 flex-1 rounded-lg border p-3 text-sm"
-                />
-
-                <button
-                  disabled={loading}
-                  onClick={() => applyCoordinate("end")}
-                  className="rounded-lg bg-gray-100 px-3 text-sm disabled:opacity-50"
-                >
-                  적용
-                </button>
-
-                <button
-                  disabled={loading}
-                  onClick={() => setSelectionMode("end")}
-                  className={`rounded-lg px-3 text-sm disabled:opacity-50 ${
-                    selectionMode === "end"
-                      ? "bg-green-600 text-white"
-                      : "bg-green-100 text-green-800"
-                  }`}
-                >
-                  지도 선택
-                </button>
-              </div>
-            </div>
-
-            {/* 회피 강도 */}
-            <div className="space-y-1">
-              <label
-                htmlFor="avoidance-level"
-                className="text-sm font-bold"
-              >
-                간접흡연 회피 강도
-              </label>
-
-              <select
-                id="avoidance-level"
-                value={level}
-                disabled={loading}
-                onChange={(e) => {
-                  setLevel(
-                    e.target.value as
-                    RouteRequest["avoidanceLevel"]
-                  );
-
-                  clearSearchResult();
-                }}
-                className="w-full rounded-lg border p-3 text-sm"
-              >
-                <option value="low">낮음</option>
-                <option value="medium">보통</option>
-                <option value="high">높음</option>
-              </select>
-
-              <p className="text-xs text-gray-500">
-                현재 일반 최단경로에는 회피 강도가 적용되지 않습니다.
-              </p>
-            </div>
-
-            {/* 경로 탐색 및 초기화 */}
-            <div className="flex gap-2">
-              <button
-                disabled={!start || !end || loading}
-                onClick={handleSearch}
-                className="flex-1 rounded-lg bg-green-600 p-3 font-bold text-white disabled:bg-gray-300"
-              >
-                {loading ? "탐색 중..." : "경로 탐색"}
-              </button>
-
-              <button
-                disabled={loading}
-                onClick={resetRoute}
-                className="rounded-lg border px-5 py-3 disabled:opacity-50"
-              >
-                초기화
-              </button>
-            </div>
-
-            {/* 탐색 중 실시간 경과 시간 */}
-            {loading && (
-              <div
-                role="status"
-                className="rounded-lg border border-blue-200 bg-blue-50 p-3"
-              >
-                <p className="text-sm font-bold text-blue-700">
-                  A* 경로 탐색 중...
-                </p>
-
-                <p className="mt-1 text-xl font-bold text-blue-800">
-                  {elapsedSeconds.toFixed(1)}초 경과
-                </p>
-
-                <p className="mt-1 text-xs text-blue-600">
-                  저장된 강남구 보행 네트워크를 이용해 계산합니다.
-                </p>
-              </div>
-            )}
-
-            {/* 탐색 완료 */}
-            {!loading && searchStatus === "success" && (
-              <div className="rounded-lg border border-green-200 bg-green-50 p-3">
-                <p className="text-sm font-bold text-green-700">
-                  경로 탐색 완료
-                </p>
-
-                <p className="mt-1 text-lg font-bold text-green-800">
-                  {elapsedSeconds.toFixed(1)}초 소요
-                </p>
-              </div>
-            )}
-
-            {/* 탐색 실패 */}
-            {!loading && searchStatus === "error" && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-                <p className="text-sm font-bold text-red-700">
-                  경로 탐색 실패
-                </p>
-
-                <p className="mt-1 text-lg font-bold text-red-800">
-                  {elapsedSeconds.toFixed(1)}초 경과
-                </p>
-              </div>
-            )}
-
-            {/* 경로 탐색 결과 */}
-            {routes.length > 0 && (
-              <div className="space-y-2">
-
-                {routes.map((route) => (
-                  <div
-                    key={route.id}
-                    className="rounded-lg border border-blue-100 bg-blue-50 p-4"
-                  >
-                    <p className="font-bold text-blue-800">
-                      {route.name}
-                    </p>
-
-                    <div className="mt-2 grid grid-cols-2 gap-3">
-
-                      <div>
-                        <p className="text-xs text-gray-500">
-                          경로 거리
-                        </p>
-                        <p className="text-lg font-bold">
-                          {route.distanceM.toLocaleString()}m
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-gray-500">
-                          예상 도보 시간
-                        </p>
-                        <p className="text-lg font-bold">
-                          {route.estimatedMinutes !== undefined
-                            ? `약 ${route.estimatedMinutes.toFixed(1)}분`
-                            : "정보 없음"}
-                        </p>
-                      </div>
-
-                    </div>
-
-                    {/* 보행 링크 접속 정보 */}
-                    {route.startSnapDistanceM !== undefined &&
-                      route.endSnapDistanceM !== undefined && (
-                        <div className="mt-3 rounded-lg bg-white p-3 text-xs text-gray-600">
-                          <p className="font-bold text-gray-700">
-                            보행로 연결 정보
-                          </p>
-
-                          <p className="mt-1">
-                            출발지 → 보행로:{" "}
-                            {route.startSnapDistanceM.toFixed(1)}m
-                          </p>
-
-                          <p>
-                            목적지 → 보행로:{" "}
-                            {route.endSnapDistanceM.toFixed(1)}m
-                          </p>
-
-                          <p className="mt-2 text-gray-500">
-                            위 거리는 클릭 위치에서 보행 링크까지의
-                            직선거리이며, 경로 거리에는 포함되지 않습니다.
-                          </p>
-                        </div>
-                      )}
-
-                  </div>
-                ))}
-              </div>
-            )}
-
-          </div>
-
-        ) : pageMode === "report" ? (
-
-          /* 사용자 제보 */
-
-          <ReportForm
-            location={reportLocation}
-            submitting={reportSubmitting}
-            onSubmit={handleCreateReport}
-            onSelectLocation={() =>
-              setSelectionMode("report")
-            }
-            onCancel={() => changePage("route")}
+        {/* 경로 탐색 탭 */}
+        {pageMode === "route" && (
+          <RoutePanel
+            start={start}
+            end={end}
+            startText={startText}
+            endText={endText}
+            selectionMode={selectionMode}
+            avoidanceLevel={avoidanceLevel}
+            routes={routes}
+            loading={loading}
+            elapsedSeconds={elapsedSeconds}
+            searchStatus={searchStatus}
+            onStartTextChange={setStartText}
+            onEndTextChange={setEndText}
+            onApplyCoordinate={applyCoordinate}
+            onSelectLocation={setSelectionMode}
+            onUseCurrentLocation={useCurrentLocation}
+            onAvoidanceLevelChange={(value) => {
+              setAvoidanceLevel(value);
+              clearSearchResult();
+            }}
+            onSearch={() => void handleSearch()}
+            onReset={resetRoute}
           />
+        )}
 
-        ) : (
+        {/* 흡연 제보 탭 */}
+        {pageMode === "report" && (
+          <div className="space-y-3">
+            <ReportForm
+              location={reportLocation}
+              submitting={reportSubmitting}
+              onSubmit={handleCreateReport}
+              onSelectLocation={() => {
+                setReportNotice(null);
+              }}
+              onCancel={() => changePage("route")}
+            />
 
-          /* 관리자 대시보드 */
+            {reportNotice && (
+              <p
+                role="status"
+                className="rounded-lg bg-green-50 p-3 text-sm text-green-700"
+              >
+                {reportNotice}
+              </p>
+            )}
+          </div>
+        )}
 
+        {/* 관리자 탭 */}
+        {pageMode === "admin" && (
           <AdminDashboard
             reports={reports}
             risks={risks}
             onFocusLocation={focusReportLocation}
+            onReviewCompleted={handleReviewCompleted}
           />
-
         )}
 
-        {/* 공통 지도 표시 설정 */}
+        {/* 기존 지도 표시 설정 */}
         <div className="mt-4 flex flex-wrap gap-4 border-t pt-3">
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={showRisks}
-              onChange={(e) =>
-                setShowRisks(e.target.checked)
+              onChange={(event) =>
+                setShowRisks(event.target.checked)
               }
               className="h-4 w-4 accent-green-600"
             />
@@ -844,16 +730,15 @@ export default function App() {
             <input
               type="checkbox"
               checked={showReports}
-              onChange={(e) =>
-                setShowReports(e.target.checked)
+              onChange={(event) =>
+                setShowReports(event.target.checked)
               }
               className="h-4 w-4 accent-purple-600"
             />
-            사용자 제보 표시 ({reports.length})
+            승인된 제보 표시 ({reports.length})
           </label>
         </div>
 
-        {/* 위험도 데이터 상태 */}
         {riskLoading && (
           <p className="mt-2 text-xs text-gray-500">
             위험도 데이터를 불러오는 중...
@@ -861,24 +746,29 @@ export default function App() {
         )}
 
         {riskError && (
-          <p role="alert" className="mt-2 text-xs text-red-600">
+          <p
+            role="alert"
+            className="mt-2 text-xs text-red-600"
+          >
             {riskError}
           </p>
         )}
 
-        {/* 제보 데이터 상태 */}
         {reportError && (
-          <p role="alert" className="mt-2 text-xs text-red-600">
+          <p
+            role="alert"
+            className="mt-2 text-xs text-red-600"
+          >
             {reportError}
           </p>
         )}
 
         <p className="mt-3 text-xs text-gray-500">
-          ※ 현재 위험도와 제보는 프로토타입 데이터입니다.
-          일반 경로는 OSM 보행 네트워크 기반이며,
-          실제 도보 안내용으로 검증되지 않았습니다.
+          ※ 현재 위험도는 Mock 데이터입니다.
+          공개 지도에는 승인된 제보만 표시되며,
+          사용자 제보는 위험 회피 A*에 자동으로
+          반영되지 않습니다.
         </p>
-
       </section>
     </div>
   );

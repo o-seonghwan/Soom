@@ -4,52 +4,94 @@ import type {
   ReportRequest,
 } from "../types/report";
 
-import {
-  getMockReports,
-  addMockReport,
-} from "../mocks/mockReports";
+// =====================================================
+// 1. FastAPI 주소
+// =====================================================
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
   "http://localhost:8000";
 
-const USE_MOCK =
-  import.meta.env.VITE_USE_MOCK !== "false";
 
-// 제보 목록 조회
+// =====================================================
+// 2. 제보 목록 조회
+// =====================================================
+
 export async function getReports(): Promise<Report[]> {
-  if (USE_MOCK) {
-    return getMockReports();
-  }
-
-  const response = await fetch(`${API_BASE_URL}/api/reports`);
+  const response = await fetch(
+    `${API_BASE_URL}/api/reports`
+  );
 
   if (!response.ok) {
-    throw new Error(`제보 조회 실패: ${response.status}`);
+    throw new Error(
+      `제보 목록 조회에 실패했습니다. (${response.status})`
+    );
   }
 
-  return (await response.json()) as Report[];
+  const data: unknown = await response.json();
+
+  if (!Array.isArray(data)) {
+    throw new Error(
+      "제보 목록 API 응답 형식이 올바르지 않습니다."
+    );
+  }
+
+  return data as Report[];
 }
 
-// 제보 등록
+
+// =====================================================
+// 3. 신규 제보 등록
+// =====================================================
+
 export async function createReport(
   request: ReportRequest
 ): Promise<Report> {
-  if (USE_MOCK) {
-    return addMockReport(request);
-  }
-
-  const response = await fetch(`${API_BASE_URL}/api/reports`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(request),
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/reports`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    }
+  );
 
   if (!response.ok) {
-    throw new Error(`제보 등록 실패: ${response.status}`);
+    let message = "제보 등록에 실패했습니다.";
+
+    try {
+      const errorData: unknown =
+        await response.json();
+
+      if (
+        typeof errorData === "object" &&
+        errorData !== null &&
+        "detail" in errorData &&
+        typeof errorData.detail === "string"
+      ) {
+        message = errorData.detail;
+      }
+    } catch {
+      // JSON 형태가 아니라면 기본 오류 메시지 사용
+    }
+
+    throw new Error(message);
   }
 
-  return (await response.json()) as Report;
+  const data: unknown = await response.json();
+
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    !("id" in data) ||
+    typeof data.id !== "string"
+  ) {
+    throw new Error(
+      "제보 등록 API 응답 형식이 올바르지 않습니다."
+    );
+  }
+
+  return data as Report;
 }

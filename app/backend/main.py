@@ -1,38 +1,105 @@
 
 from contextlib import asynccontextmanager
+from typing import Literal
+from uuid import UUID
 
 import networkx as nx
+import psycopg
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+    status,
+)
+
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Literal
 
 from walking_router import (
     load_walking_graph,
     calculate_shortest_route,
 )
 
+from safe_router import calculate_safest_route
+from risk_provider import get_risk_snapshot
 
-# 서버 시작 시 실행되는 함수
+from risk_mapper import (
+    map_risks_to_edges,
+    summarize_edge_risks,
+    serialize_edge_risks,
+)
+
+from report_schemas import (
+    ReportCreate,
+    ReportResponse,
+    ReportReview,
+    AdminReportResponse,
+)
+
+from report_repository import (
+    insert_report,
+    select_public_reports,
+    select_admin_reports,
+    update_report_review,
+)
+
+from admin_auth import require_admin
+
+
+# =========================================
+# 1. 서버 시작 및 종료
+# =========================================
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 저장된 보행 네트워크를 메모리에 한 번 로드
-    app.state.walking_graph = load_walking_graph()
+    print("강남구 시스템 초기화 시작", flush=True)
+
+    graph = load_walking_graph()
+    snapshot = get_risk_snapshot()
+
+    edge_risks = map_risks_to_edges(
+        graph=graph,
+        risk_locations=snapshot["locations"],
+    )
+
+    app.state.walking_graph = graph
+    app.state.risk_snapshot = snapshot
+    app.state.edge_risks = edge_risks
+
+    summary = summarize_edge_risks(
+        graph=graph,
+        edge_risks=edge_risks,
+    )
+
+    print(
+        f"위험 위치: {len(snapshot['locations'])}개",
+        flush=True,
+    )
+    print(
+        f"위험 영향 링크: {summary['affectedEdges']}개",
+        flush=True,
+    )
+    print("시스템 초기화 완료", flush=True)
 
     yield
 
-    # 서버 종료 시 메모리 참조 해제
     app.state.walking_graph = None
+    app.state.risk_snapshot = None
+    app.state.edge_risks = None
 
+
+# =========================================
+# 2. FastAPI 초기화
+# =========================================
 
 app = FastAPI(
-    title="폐(Lung) 끼치지 마세요 - 강남구 도보 경로 API",
-    version="0.2.0",
+    title="폐(Lung) 끼치지 마세요 - 강남구 API",
+    version="0.6.0",
     lifespan=lifespan,
 )
 
-# React 개발 서버 접근 허용
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -40,10 +107,17 @@ app.add_middleware(
         "http://127.0.0.1:5173",
     ],
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_methods=["GET", "POST", "PATCH"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+    ],
 )
 
+
+# =========================================
+# 3. 경로 요청 타입
+# =========================================
 
 class RouteRequest(BaseModel):
     start: tuple[float, float] = Field(
@@ -55,17 +129,94 @@ class RouteRequest(BaseModel):
     )
 
     avoidanceLevel: Literal[
-        "low", "medium", "high"
+        "low",
+        "medium",
+        "high",
     ] = "medium"
 
 
+# =========================================
+# 4. 경로 요청 검증
+# =========================================
+
+def validate_route_request(request: RouteRequest):
+    for lat, lon in [
+        request.start,
+        request.end,
+    ]:
+        if not (
+            -90 <= lat <= 90
+            and -180 <= lon <= 180
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="유효하지 않은 위경도입니다.",
+            )
+
+
+# =========================================
+# 5. 경로 오류 처리
+# =========================================
+
+def handle_route_error(error):
+    if isinstance(error, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        ) from error
+
+    if isinstance(
+        error,
+        (nx.NetworkXNoPath, nx.NodeNotFound),
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="연결된 보행 경로를 찾지 못했습니다.",
+        ) from error
+
+    print(
+        "경로 계산 오류:",
+        repr(error),
+        flush=True,
+    )
+
+    raise HTTPException(
+        status_code=503,
+        detail="보행 경로 계산에 실패했습니다.",
+    ) from error
+
+
+# =========================================
+# 6. 제보 DB 오류 처리
+# =========================================
+
+def handle_report_db_error(error):
+    print(
+        "제보 DB 오류:",
+        repr(error),
+        flush=True,
+    )
+
+    raise HTTPException(
+        status_code=503,
+        detail="제보 데이터베이스 처리에 실패했습니다.",
+    ) from error
+
+
+# =========================================
+# 7. 기존 시스템 API
+# =========================================
+
 @app.get("/api/health")
-def health():
+def health(request: Request):
     return {
         "status": "ok",
         "service": "gangnam-walking-route",
         "graph_loaded": (
-            app.state.walking_graph is not None
+            request.app.state.walking_graph is not None
+        ),
+        "risk_source": (
+            request.app.state.risk_snapshot["source"]
         ),
     }
 
@@ -75,13 +226,7 @@ def shortest_route(
     request: RouteRequest,
     http_request: Request,
 ):
-    # 위경도 유효성 검증
-    for lat, lon in [request.start, request.end]:
-        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-            raise HTTPException(
-                status_code=422,
-                detail="유효하지 않은 위경도입니다.",
-            )
+    validate_route_request(request)
 
     try:
         graph = http_request.app.state.walking_graph
@@ -92,26 +237,183 @@ def shortest_route(
             end=request.end,
         )
 
-        return {
-            "routes": [route]
-        }
-
-    except ValueError as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        )
-
-    except (nx.NetworkXNoPath, nx.NodeNotFound):
-        raise HTTPException(
-            status_code=404,
-            detail="연결된 보행 경로를 찾지 못했습니다.",
-        )
+        return {"routes": [route]}
 
     except Exception as error:
-        print("경로 계산 오류:", repr(error), flush=True)
+        handle_route_error(error)
 
-        raise HTTPException(
-            status_code=503,
-            detail="보행 경로 계산에 실패했습니다.",
+
+@app.post("/api/routes")
+def compare_routes(
+    request: RouteRequest,
+    http_request: Request,
+):
+    validate_route_request(request)
+
+    graph = http_request.app.state.walking_graph
+    edge_risks = http_request.app.state.edge_risks
+    snapshot = http_request.app.state.risk_snapshot
+
+    try:
+        shortest = calculate_shortest_route(
+            graph=graph,
+            start=request.start,
+            end=request.end,
         )
+
+        safest = calculate_safest_route(
+            graph=graph,
+            start=request.start,
+            end=request.end,
+            avoidance_level=request.avoidanceLevel,
+            edge_risks=edge_risks,
+            risk_locations=snapshot["locations"],
+        )
+
+        return {
+            "routes": [shortest, safest]
+        }
+
+    except Exception as error:
+        handle_route_error(error)
+
+
+@app.get("/api/risks")
+def get_risks(request: Request):
+    return request.app.state.risk_snapshot["locations"]
+
+
+@app.get("/api/risks/edges")
+def get_edge_risks(
+    request: Request,
+    limit: int = 100,
+):
+    if not 1 <= limit <= 1000:
+        raise HTTPException(
+            status_code=422,
+            detail="limit은 1~1000 사이여야 합니다.",
+        )
+
+    graph = request.app.state.walking_graph
+    snapshot = request.app.state.risk_snapshot
+    edge_risks = request.app.state.edge_risks
+
+    return {
+        "source": snapshot["source"],
+        "version": snapshot["version"],
+        "generatedAt": snapshot["generatedAt"],
+        "summary": summarize_edge_risks(
+            graph=graph,
+            edge_risks=edge_risks,
+        ),
+        "edges": serialize_edge_risks(
+            edge_risks,
+            limit=limit,
+        ),
+    }
+
+
+# =========================================
+# 8. 공개 사용자 제보 API
+# =========================================
+
+@app.post(
+    "/api/reports",
+    response_model=ReportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_report(report: ReportCreate):
+    try:
+        return insert_report(report)
+    except psycopg.Error as error:
+        handle_report_db_error(error)
+
+
+@app.get(
+    "/api/reports",
+    response_model=list[ReportResponse],
+)
+def get_reports(limit: int = 500):
+    """
+    승인된 제보만 공개 조회한다.
+    """
+
+    if not 1 <= limit <= 500:
+        raise HTTPException(
+            status_code=422,
+            detail="limit은 1~500 사이여야 합니다.",
+        )
+
+    try:
+        return select_public_reports(limit=limit)
+    except psycopg.Error as error:
+        handle_report_db_error(error)
+
+
+# =========================================
+# 9. 관리자 로그인 확인 API
+# =========================================
+
+@app.get("/api/admin/me")
+def admin_me(
+    admin_username: str = Depends(require_admin),
+):
+    return {
+        "authenticated": True,
+        "username": admin_username,
+    }
+
+
+# =========================================
+# 10. 관리자 전체 제보 조회 API
+# =========================================
+
+@app.get(
+    "/api/admin/reports",
+    response_model=list[AdminReportResponse],
+)
+def get_admin_reports(
+    limit: int = 500,
+    admin_username: str = Depends(require_admin),
+):
+    if not 1 <= limit <= 500:
+        raise HTTPException(
+            status_code=422,
+            detail="limit은 1~500 사이여야 합니다.",
+        )
+
+    try:
+        return select_admin_reports(limit=limit)
+    except psycopg.Error as error:
+        handle_report_db_error(error)
+
+
+# =========================================
+# 11. 관리자 제보 승인·반려 API
+# =========================================
+
+@app.patch(
+    "/api/admin/reports/{report_id}",
+    response_model=AdminReportResponse,
+)
+def review_report(
+    report_id: UUID,
+    review: ReportReview,
+    admin_username: str = Depends(require_admin),
+):
+    try:
+        updated = update_report_review(
+            report_id=report_id,
+            review=review,
+        )
+
+    except psycopg.Error as error:
+        handle_report_db_error(error)
+
+    if updated is None:
+        raise HTTPException(
+            status_code=404,
+            detail="해당 제보를 찾을 수 없습니다.",
+        )
+
+    return updated
