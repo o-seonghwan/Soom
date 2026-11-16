@@ -31,6 +31,8 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m compileall -q app/backend notebooks/02_preprocessing notebooks/03_modeling
+      - name: Test risk model CSV and 21m decay bands
+        run: python -m unittest discover -s app/backend -p "test_model_risk_integration.py" -v
       - name: Validate Jupyter notebooks
         run: |
           python - <<'PY'

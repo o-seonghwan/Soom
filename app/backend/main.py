@@ -64,6 +64,12 @@ async def lifespan(app: FastAPI):
         risk_locations=snapshot["locations"],
     )
 
+    if snapshot["source"] == "model-csv" and not edge_risks:
+        raise ValueError(
+            "모델 CSV는 로딩됐으나 21m 이내에 매칭된 보행 링크가 없습니다. "
+            "CSV 좌표계/분석범위와 보행 네트워크를 확인하세요."
+        )
+
     app.state.walking_graph = graph
     app.state.risk_snapshot = snapshot
     app.state.edge_risks = edge_risks
