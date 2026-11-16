@@ -52,21 +52,23 @@ python -m uvicorn main:app --reload
 - B2C 청정지수 Canvas: 투명도 누적 방지를 위해 검정 바탕에서 최대 grayscale 합성 후 단일 색상 alpha로 적용. 지도 이동 시작 시 잠시 숨기고 이동 완료 후 재생성(잔상 완화).
 - 지도 선 끝·교차점은 round로 처리. **지도 출력의 부드러움은 브라우저·확대 수준에 따라 차이가 있어 수동 테스트가 필요**.
 
-## 주소 API 연결 (Kakao Local)
+## 주소 API 연결 (VWorld)
 
-카카오 Developers에서 앱을 등록하고 **REST API 키**를 발급받아 백엔드 환경변수로 설정합니다. 백엔드 시작 터미널의 PowerShell 예:
+브이월드(vworld.kr)에서 인증키를 발급받아 백엔드 환경변수로 설정합니다. 백엔드 시작 터미널의 PowerShell 예:
 
 ```powershell
-$env:KAKAO_REST_API_KEY = "카카오_앱의_REST_API_키"
+$env:VWORLD_API_KEY = "브이월드_인증키"
 cd app/backend
 python -m uvicorn main:app --reload
 ```
 
 `app/backend/.env.example`은 참고 파일일 뿐 자동으로 환경변수를 설정하지 않습니다. API 키를 프론트엔드의 `VITE_*`나 GitHub에 넣으면 안 됩니다.
 
-카카오 좌표→주소 API는 `GET https://dapi.kakao.com/v2/local/geo/coord2address.json?x={경도}&y={위도}&input_coord=WGS84`입니다. 백엔드 `GET /api/reverse-address?lat=37.5&lng=127.02`가 이 API를 서버에서 호출하고 응답을 캐싱합니다. 키 미설정/검색 실패 시 지도 경로 계산을 중단하지 않고 **좌표와 주소 확인 불가 안내**로 대신 표시합니다.
+VWorld 좌표→주소 API는 `GET https://api.vworld.kr/req/address?service=address&request=getaddress&crs=EPSG:4326&point={경도},{위도}&type=both&format=json&key=...`입니다. 백엔드 `GET /api/reverse-address?lat=37.5&lng=127.02`가 이 API를 서버에서 호출합니다. 도로명주소를 먼저 쓰고, 없으면 지번주소로 대신합니다. 키 미설정/검색 실패 시 지도 경로 계산을 중단하지 않고 **좌표와 주소 확인 불가 안내**로 대신 표시합니다.
 
-참고: https://developers.kakao.com/docs/latest/ko/local/dev-guide#coord-to-address
+VWorld 이용약관상 조회 결과를 별도 저장장치·데이터베이스에 저장하면 안 됩니다. 백엔드는 결과를 파일이나 DB에 쓰지 않고, 서버가 켜져 있는 동안만 메모리에 기억합니다.
+
+참고: https://www.vworld.kr/dev/v4dv_geocoderguide2_s001.do
 
 ## 흡연구역 지도 API 연결
 
