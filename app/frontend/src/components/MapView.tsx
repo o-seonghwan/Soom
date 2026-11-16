@@ -262,10 +262,7 @@ export default function MapView({
           setBoundary(data);
         }
       } catch (error) {
-        console.error(error);
-
-        if (!cancelled) {
-        }
+        if (!cancelled) console.error("강남구 경계 데이터 조회 실패:", error);
       }
     }
 
