@@ -294,10 +294,22 @@ def get_risks(request: Request):
 
 @app.get("/api/b2g/cleanliness/edges")
 def get_b2g_cleanliness_edges(request: Request):
-    """Precomputed GeoJSON, no invented scores for unscored paths."""
+    """B2G visualization must use actual model results, never Mock scores."""
+    snapshot = request.app.state.risk_snapshot
+    if snapshot["source"] != "model-csv":
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "B2G 청정지수는 AI 모델 결과만 표시합니다. "
+                "LUNG_RISK_CSV에 1_위험지도_지점.csv의 전체 경로를 지정하고 "
+                "백엔드를 재시작하세요."
+            ),
+        )
     return {
         **request.app.state.b2g_cleanliness,
-        "source": request.app.state.risk_snapshot["source"],
+        "source": "model-csv",
+        "modelPointCount": len(snapshot["locations"]),
+        "modelVersion": snapshot["version"],
     }
 
 
