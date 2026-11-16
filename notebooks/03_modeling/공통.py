@@ -64,10 +64,13 @@ def use_preprocessed_data():
     if configured:
         EDA_ROOT = Path(configured).resolve()
     else:
-        EDA_ROOT = next(
-            (processed / name for name in ("전처리결과", "EDA결과") if (processed / name).is_dir()),
+        # 기존 모델 배치와 EDA 노트북의 실제 출력 경로를 모두 지원합니다.
+        candidates = [
             processed / "전처리결과",
-        )
+            processed / "EDA결과",
+            REPO_ROOT.parent / "data" / "processed_data",
+        ]
+        EDA_ROOT = next((p for p in candidates if p.is_dir()), candidates[0])
     if not EDA_ROOT.is_dir():
         raise FileNotFoundError(f"전처리 결과 폴더를 찾을 수 없습니다. LUNG_EDA_ROOT를 확인하세요: {EDA_ROOT}")
     OUT_DIR = str(EDA_OUT_DIR)
@@ -173,32 +176,80 @@ def save(df, name):
 
 
 # ═════════════════════════ 데이터 읽기 ═════════════════════════
+def _eda_livepop_paths(root):
+    """Locate 2026-10-27/28/29 features using either established folder naming.
+
+    Duplicate copies or absent days fail loudly to avoid partial/biased training.
+    """
+    if root is None:
+        return []
+    matches = {}
+    for p in Path(root).rglob("features.csv"):
+        folder = p.parent.name.lower()
+        if not (folder.startswith("local_resd_250m") or folder.startswith("250_local_resd_")):
+            continue
+        if "20261027" in folder or folder == "local_resd_250m":
+            day = "20261027"
+        elif "20261028" in folder:
+            day = "20261028"
+        elif "20261029" in folder:
+            day = "20261029"
+        else:
+            continue
+        if day in matches:
+            raise ValueError(f"생활인구 {day}일 전처리 features.csv가 여러 곳에 있습니다: {matches[day]}, {p}")
+        matches[day] = p
+
+    expected = {"20261027", "20261028", "20261029"}
+    if set(matches) != expected:
+        raise FileNotFoundError(
+            f"생활인구 EDA 3일치 features.csv가 필요합니다. 누락: {sorted(expected - set(matches))}. "
+            f"검색: {root}. LUNG_EDA_ROOT로 처리 결과 최상위 폴더를 지정하세요."
+        )
+    return [matches[day] for day in sorted(expected)]
+
+
 def load_livepop():
-    """생활인구(여러 날) → [일자, 시간, 250M격자, 행정동코드, 생활인구합계]. '*'(비공개)는 공개된 최솟값으로 채움"""
+    """Load all three daily grids. Suppressed '*' values remain missing, never 0."""
     cols = ["일자", "시간", "250M격자", "행정동코드", "생활인구합계"]
     if EDA_ROOT is not None:
-        paths = eda_tables("250_LOCAL_RESD_*", "features.csv", multiple=True)
+        paths = _eda_livepop_paths(EDA_ROOT)
         parts = [read_csv_any(p, dtype=str, usecols=cols) for p in paths]
-        data = pd.concat(parts, ignore_index=True).drop_duplicates(cols[:4])
-        data["시간"] = pd.to_numeric(data["시간"], errors="coerce")
-        data["생활인구합계"] = pd.to_numeric(data["생활인구합계"], errors="coerce")
-        days = ", ".join(sorted(data["일자"].dropna().unique()))
-        log(f"전처리 생활인구: {days} | 비공개 값은 관측 평균 계산에서 제외")
-        return data
+    else:
+        parts = [read_csv_any(p, dtype=str, usecols=cols) for p in find_all(F["pop_csv"])]
+        if not parts:
+            for zp in find_all(F["pop_zip"]):
+                parts.append(read_csv_any(zip_member(zp, ".csv"), dtype=str, usecols=cols))
+        if not parts:
+            raise FileNotFoundError("생활인구 CSV/ZIP을 찾지 못했습니다. LUNG_DATA_ROOT를 확인하세요.")
 
-    parts = [read_csv_any(p, dtype=str, usecols=cols) for p in find_all(F["pop_csv"])]
-    if not parts:
-        for zp in find_all(F["pop_zip"]):
-            parts.append(read_csv_any(zip_member(zp, ".csv"), dtype=str, usecols=cols))
-    if not parts: find(F["pop_csv"])
-    df = pd.concat(parts, ignore_index=True).drop_duplicates(["일자", "시간", "250M격자", "행정동코드"])
-    df["행정동코드"] = df["행정동코드"].str.strip()
-    df["시간"] = pd.to_numeric(df["시간"], errors="coerce")
-    masked = df["생활인구합계"].astype(str).str.strip().eq("*")
-    df["생활인구합계"] = pd.to_numeric(df["생활인구합계"], errors="coerce")
-    df.loc[masked, "생활인구합계"] = df.loc[df["생활인구합계"] > 0, "생활인구합계"].min()
-    log(f"생활인구: {df['일자'].nunique()}일치 ({df['일자'].min()}~{df['일자'].max()}), 비공개 '*' {int(masked.sum()):,}칸 채움")
-    return df
+    data = pd.concat(parts, ignore_index=True)
+    data["행정동코드"] = data["행정동코드"].astype("string").str.strip()
+    data["250M격자"] = data["250M격자"].astype("string").str.strip()
+    data["일자"] = data["일자"].astype("string").str.replace("-", "", regex=False).str.strip()
+    data["시간"] = pd.to_numeric(data["시간"], errors="coerce")
+    source_values = data["생활인구합계"].astype("string").str.strip()
+    masked = source_values.eq("*").fillna(False)
+    data["생활인구합계"] = pd.to_numeric(
+        source_values.mask(masked).str.replace(",", "", regex=False),
+        errors="coerce",
+    )
+    expected = {"20261027", "20261028", "20261029"}
+    observed = set(data["일자"].dropna().unique())
+    if not expected.issubset(observed):
+        raise ValueError(f"생활인구 원본 3일치 중 누락된 날짜: {sorted(expected - observed)}")
+    if data[cols[:4]].isna().any().any():
+        raise ValueError("생활인구의 일자/시간/격자/행정동코드에 결측이 있습니다.")
+    if not data["시간"].between(0, 23).all():
+        raise ValueError("생활인구 시간 값이 0~23시 범위를 벗어났습니다.")
+    duplicates = data.duplicated(cols[:4], keep=False)
+    if duplicates.any():
+        raise ValueError(f"생활인구 날짜/시간/격자/행정동 복합키 중복: {int(duplicates.sum())}행")
+    log(
+        f"생활인구: {', '.join(sorted(observed))} | 총 {len(data):,}행 | "
+        f"'*' 원본표시 {int(masked.sum()):,}개 | 생활인구 결측 {int(data['생활인구합계'].isna().sum()):,}개"
+    )
+    return data
 
 
 def grid_polygon(code):
