@@ -15,12 +15,11 @@ import {
   useMapEvents,
 } from "react-leaflet";
 
-import type { Feature, GeoJsonObject, Polygon } from "geojson";
+import type { Feature, FeatureCollection, GeoJsonObject, Polygon } from "geojson";
 import type { Coordinate, Route } from "../types/route";
 import type { RiskLocation } from "../types/risk";
 import type { Report } from "../types/report";
 
-import { getRiskColor } from "../utils/riskColor";
 import { getCleanColor } from "../utils/cleanColor";
 import type { CleanEdgeFeature } from "../types/cleanliness";
 import "leaflet/dist/leaflet.css";
@@ -269,7 +268,7 @@ export default function MapView({
         {audience === "b2g" && showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
           <GeoJSON
             key={`clean-roads-${cleanlinessEdges.length}`}
-            data={{ type: "FeatureCollection", features: cleanlinessEdges }}
+            data={{ type: "FeatureCollection", features: cleanlinessEdges } as FeatureCollection}
             style={(feature) => ({
               color: getCleanColor(Number(feature?.properties?.cleanIndex ?? 100)),
               weight: 5,
@@ -292,8 +291,8 @@ export default function MapView({
               radius={risk.radiusM}
               bubblingMouseEvents={false}
               pathOptions={{
-                color: audience === "b2g" ? getRiskColor(risk.score) : "#64748b",
-                fillColor: audience === "b2g" ? getRiskColor(risk.score) : "#93c5d6",
+                color: "#64748b",
+                fillColor: "#93c5d6",
                 fillOpacity: 0.35,
                 weight: 1,
               }}
