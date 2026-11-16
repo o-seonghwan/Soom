@@ -23,6 +23,7 @@ from walking_router import (
 )
 
 from safe_router import calculate_safest_route
+from b2g_cleanliness import edge_cleanliness_geojson
 from risk_provider import get_risk_snapshot
 
 from risk_mapper import (
@@ -73,6 +74,7 @@ async def lifespan(app: FastAPI):
     app.state.walking_graph = graph
     app.state.risk_snapshot = snapshot
     app.state.edge_risks = edge_risks
+    app.state.b2g_cleanliness = edge_cleanliness_geojson(graph, edge_risks)
 
     summary = summarize_edge_risks(
         graph=graph,
@@ -94,6 +96,7 @@ async def lifespan(app: FastAPI):
     app.state.walking_graph = None
     app.state.risk_snapshot = None
     app.state.edge_risks = None
+    app.state.b2g_cleanliness = None
 
 
 # =========================================
@@ -287,6 +290,15 @@ def compare_routes(
 @app.get("/api/risks")
 def get_risks(request: Request):
     return request.app.state.risk_snapshot["locations"]
+
+
+@app.get("/api/b2g/cleanliness/edges")
+def get_b2g_cleanliness_edges(request: Request):
+    """Precomputed GeoJSON, no invented scores for unscored paths."""
+    return {
+        **request.app.state.b2g_cleanliness,
+        "source": request.app.state.risk_snapshot["source"],
+    }
 
 
 @app.get("/api/risks/edges")
