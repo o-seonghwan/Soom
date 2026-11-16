@@ -11,9 +11,11 @@ export async function getB2GCleanEdges(): Promise<CleanEdgeCollection> {
     throw new Error("청정지수 응답 형식이 잘못되었습니다.");
   }
   const data = value as CleanEdgeCollection;
-  if (data.type !== "FeatureCollection" || !Array.isArray(data.features)
-      || !["mock","model-csv"].includes(data.source)) {
+  if (data.type !== "FeatureCollection" || !Array.isArray(data.features)) {
     throw new Error("청정지수 GeoJSON 형식이 잘못되었습니다.");
+  }
+  if (data.source !== "model-csv") {
+    throw new Error("실제 AI 모델 결과가 연결되지 않았습니다. LUNG_RISK_CSV 설정을 확인하세요.");
   }
   return data;
 }
