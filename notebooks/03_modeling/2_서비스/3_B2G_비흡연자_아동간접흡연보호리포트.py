@@ -15,6 +15,9 @@
 import os, sys
 import numpy as np, pandas as pd
 from scipy.spatial import cKDTree
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))  # 공통.py가 있는 code 폴더
 import 공통 as C
 
 CARE_ROUTE_R = 100       # 어린이집 등하원 동선 반경(m)
@@ -72,9 +75,10 @@ def main():
     fp = fines.dropna(subset=["위도"]).groupby(["위치이름", "위도", "경도"]).size().reset_index(name="건수")
     enf = np.vstack([C.xy_m(places["위도"], places["경도"]), C.xy_m(fp["위도"], fp["경도"])])
     d_enf, _ = cKDTree(enf).query(P)
-    # 전체로 학습한 위험점수는 적발 장소를 외워 버려서, 학습에 안 쓴 블록에서 나온 예측(교차검증_예측)으로 봄
-    hi_cv = R["교차검증_예측"].rank(pct=True) >= TOP / 100
-    m = (hi_cv & (d_enf > GAP_R)).values
+    # 모델이 학습에 쓰지 않은 지점의 예측으로 순찰 후보를 찾는다.
+    prediction_column = "시험셋_예측" if "시험셋_예측" in R else "교차검증_예측"
+    high_test_risk = R[prediction_column].rank(pct=True) >= TOP / 100
+    m = (high_test_risk & (d_enf > GAP_R)).values
     gap = R[m].copy()
     gap["단속기록까지_m"] = d_enf[m].round(0)
     if len(gap):     # 가까운 공백 지점 묶기
@@ -94,8 +98,12 @@ def main():
         G = G.sort_values(["최고위험점수", "지점수"], ascending=False).reset_index(drop=True)
         G.index += 1; G.index.name = "순찰후보"
         C.save(G.reset_index(), "3_단속공백_후보.csv")
-        lines.append(f"③ 단속 공백(위험 상위10%인데 {GAP_R}m 안 적발·단속 기록 없음): {len(G)}곳 "
+        lines.append(f"③ 단속 공백(학습에 쓰지 않은 지점 중 위험 상위10%, {GAP_R}m 안 기록 없음): {len(G)}곳 "
                      f"(그중 어린이집 {CARE_ROUTE_R}m 안 {int((G['어린이집거리m'] <= CARE_ROUTE_R).sum())}곳)")
+    else:
+        columns = ["순찰후보", "위도", "경도", "지점수", "최고위험점수", "단속기록까지_m", "가까운어린이집", "어린이집거리m"]
+        C.save(pd.DataFrame(columns=columns), "3_단속공백_후보.csv")
+        lines.append("③ 단속 공백 후보: 0곳")
 
     # ④ 단속 시간대
     hr = fines["시"].value_counts().sort_index().rename_axis("시").reset_index(name="단속건수")

@@ -19,6 +19,9 @@
 import sys, os
 import numpy as np, pandas as pd
 from scipy.spatial import cKDTree
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))  # 공통.py가 있는 code 폴더
 import 공통 as C
 
 # 금지 반경(m). 근거를 바꾸면 여기만 고치면 됨

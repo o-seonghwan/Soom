@@ -4,7 +4,11 @@
 - 직접 실행하지 않아도 됩니다. (1번 코드를 처음 실행하면 특성표를 만들어 저장해 두고, 다음부터는 저장본을 씀)
 
 데이터 위치
-- 기본 원본 폴더는 저장소의 data/raw입니다. 다른 폴더는 LUNG_DATA_ROOT로 지정하세요.
+- 기본 데이터 폴더는 상위의 02_1_분석데이터입니다. 다른 폴더는 LUNG_DATA_ROOT로 지정하세요.
+- 구글 드라이브 구조(processed_data/, raw_data/)와 깃허브 저장소 구조(data/processed/, data/raw/)도 읽습니다.
+  LUNG_DRIVE_ROOT에 두 폴더가 들어 있는 최상위 폴더를 지정하면 raw_data를 원본, processed_data를 전처리본으로 씁니다.
+  지정하지 않아도 기본 폴더(02_1_분석데이터, 전처리결과)가 없으면 코드 폴더와 그 상위 세 단계에서 자동으로 찾습니다.
+- 우선순위: LUNG_DATA_ROOT·LUNG_EDA_ROOT > LUNG_DRIVE_ROOT > 기본 폴더 > 자동으로 찾은 드라이브 폴더
 - 같은 이름 파일이 여러 곳에 있으면 'eda 완료' 폴더 안의 파일을 먼저 씁니다.
 - VWorld 키는 .env 의 VWORLD_API_KEY 를 읽습니다. 키는 화면·파일 어디에도 출력하지 않습니다.
 """
@@ -16,13 +20,46 @@ import pandas as pd
 warnings.filterwarnings("ignore")
 
 # ═════════════════════════ 설정 ═════════════════════════
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DATA_ROOT = os.environ.get("LUNG_DATA_ROOT", str(REPO_ROOT / "data" / "raw"))
+_HERE = Path(os.path.abspath(__file__)).parent
+
+
+# 지원하는 폴더 구조: (전처리본 폴더, 원본 폴더)
+#  - 구글 드라이브: processed_data/, raw_data/
+#  - 깃허브 저장소: data/processed/, data/raw/
+_LAYOUTS = (("processed_data", "raw_data"), (os.path.join("data", "processed"), os.path.join("data", "raw")))
+
+
+def _layout_dirs():
+    """(전처리본, 원본) 폴더. LUNG_DRIVE_ROOT가 있으면 그 아래에서, 없으면 코드 폴더와 상위 세 단계에서 찾는다."""
+    configured = os.environ.get("LUNG_DRIVE_ROOT")
+    folders = [Path(configured).resolve()] if configured else [_HERE, *list(_HERE.parents)[:3]]
+    for folder in folders:
+        for processed, raw in _LAYOUTS:
+            if (folder / processed).is_dir() and (folder / raw).is_dir():
+                return folder / processed, folder / raw
+    if configured:
+        return Path(configured).resolve() / "processed_data", Path(configured).resolve() / "raw_data"
+    return None
+
+
+def _default_data_root():
+    if os.environ.get("LUNG_DRIVE_ROOT"):
+        return str(_layout_dirs()[1])
+    legacy = _HERE.parent / "02_1_분석데이터"
+    if legacy.is_dir():
+        return str(legacy)
+    found = _layout_dirs()
+    return str(found[1]) if found else str(legacy)
+
+
+DATA_ROOT = os.environ.get("LUNG_DATA_ROOT", _default_data_root())
 GU_NAME, GU_CODE = "강남구", "11680"
-RAW_OUT_DIR = Path(os.environ.get("LUNG_OUT_DIR", str(REPO_ROOT / "data" / "processed" / "결과"))).resolve()
-OUT_DIR = str(RAW_OUT_DIR)
+OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "결과")
+RAW_OUT_DIR = Path(OUT_DIR)
 EDA_OUT_DIR = RAW_OUT_DIR / "전처리기반"
-TRAINING_DATA_PATH = EDA_OUT_DIR / "1_학습데이터.joblib"
+TRAINING_DATA_PATH = EDA_OUT_DIR / "1_학습용_지점_21m.csv"
+TRAINING_HOURLY_PATH = EDA_OUT_DIR / "특성_강남구" / "격자_시간대별_생활인구.csv"
+VALIDATE_OTHER_GU = None   # 마포 외부 검증을 실행하려면 ("마포구", "11440")로 변경
 EDA_ROOT = None
 CRS_M = 5179               # 미터 단위 좌표계 (생활인구 250m 격자 기준)
 SEED = 42
@@ -30,7 +67,11 @@ SEED = 42
 USE_VWORLD = True          # .env 에 키가 있으면 VWorld로 꽁초 적발 장소 좌표를 찾음 (없으면 로컬 방식만)
 LIVEPOP_HOURS = [15, 16, 17, 18]   # 특성용 생활인구 시간대 평균 (15~19시)
 R_NEAR, R_MID = 50, 100    # 개수를 셀 반경(m)
-LABEL_R = 50               # 정답: 꽁초 적발 장소에서 50m 안의 걷는 길 지점 = 1
+LABEL_R = 21               # 정답: 꽁초 적발 장소 21m 이내의 보행 지점 = 1
+HIGH_R, MEDIUM_R = 10, 15
+DISTANCE_RISK_LEVELS = ["고위험", "중위험", "저위험", "범위 밖"]
+LABEL_COUNT_COLUMN = f"적발건수_{LABEL_R}m"
+LABEL_DETAIL_COLUMNS = ["최근접_적발거리_m", "적발거리_위험등급", LABEL_COUNT_COLUMN]
 MIN_WALK_M, MIN_GU_SHARE = 400, 0.5   # 분석 대상 격자: 보행로 400m 이상, 구 보행로 비율 50% 이상
 MAIN_ROAD_TOP, ALLEY_BOTTOM, ALLEY_INTO_M, BTW_SAMPLES = 0.15, 0.50, 10, 600
 BIZ_USES = ["업무시설", "판매시설", "제1종근린생활시설", "제2종근린생활시설"]
@@ -56,27 +97,62 @@ F = dict(
 def log(*a): print("▶", *a, flush=True)
 
 
+def precomputed(name):
+    """VWorld로 미리 만든 좌표 파일 위치. 결과/ 폴더를 먼저 보고, 없으면 전처리본 폴더(processed_data 등)에서 찾는다."""
+    first = RAW_OUT_DIR / name
+    if first.is_file():
+        return first
+    folders = []
+    if os.environ.get("LUNG_EDA_ROOT"):
+        folders.append(Path(os.environ["LUNG_EDA_ROOT"]).resolve())
+    found = _layout_dirs()
+    if found is not None:
+        folders.append(found[0])
+    for folder in folders:
+        if (folder / name).is_file():
+            return folder / name
+        hits = sorted(folder.rglob(name)) if folder.is_dir() else []
+        if hits:
+            return hits[0]
+    return first
+
+
 def use_preprocessed_data():
     """1·4번에서 전처리본을 우선 사용하고 원본 기반 결과와 캐시를 분리한다."""
     global EDA_ROOT, OUT_DIR
-    processed = REPO_ROOT / "data" / "processed"
+    here = Path(__file__).resolve().parent
     configured = os.environ.get("LUNG_EDA_ROOT")
+    found = _layout_dirs()
     if configured:
         EDA_ROOT = Path(configured).resolve()
+    elif os.environ.get("LUNG_DRIVE_ROOT"):
+        EDA_ROOT = found[0]
     else:
-        EDA_ROOT = next(
-            (processed / name for name in ("전처리결과", "EDA결과") if (processed / name).is_dir()),
-            processed / "전처리결과",
-        )
+        legacy = next((here / name for name in ("전처리결과", "EDA결과") if (here / name).is_dir()), None)
+        if legacy is not None:
+            EDA_ROOT = legacy
+        elif found is not None:
+            EDA_ROOT = found[0]
+        else:
+            EDA_ROOT = here / "전처리결과"
     if not EDA_ROOT.is_dir():
         raise FileNotFoundError(f"전처리 결과 폴더를 찾을 수 없습니다. LUNG_EDA_ROOT를 확인하세요: {EDA_ROOT}")
-    OUT_DIR = str(EDA_OUT_DIR)
+    OUT_DIR = str(RAW_OUT_DIR / "전처리기반")
     log(f"전처리 입력: {EDA_ROOT}")
+    log(f"원본 입력: {DATA_ROOT}")
     log("강남구 전처리본이 없는 상가·버스정류소·금연구역·어린이집·건물은 기존 자료 사용")
 
 
+# 같은 데이터셋이 저장 위치에 따라 다른 폴더 이름을 쓴다.
+# 예: PC 전처리결과는 250_LOCAL_RESD_20261027, 드라이브 processed_data는 local_resd_250m(_20261028)
+EDA_FOLDER_ALIASES = {
+    "250_LOCAL_RESD_*": ["250_LOCAL_RESD_*", "local_resd_250m*"],
+}
+
+
 def eda_tables(dataset, filename, multiple=False):
-    paths = sorted(p for p in EDA_ROOT.rglob(filename) if p.parent.match(dataset))
+    patterns = EDA_FOLDER_ALIASES.get(dataset, [dataset])
+    paths = sorted(p for p in EDA_ROOT.rglob(filename) if any(p.parent.match(pattern) for pattern in patterns))
     if not paths:
         raise FileNotFoundError(f"{EDA_ROOT}에 {dataset}/{filename}이 없습니다. 전처리 ZIP을 먼저 풀어 주세요.")
     if len({p.parent.name for p in paths}) != len(paths) or (not multiple and len(paths) != 1):
@@ -439,7 +515,7 @@ def build_features(gu=GU_NAME, gu_code=GU_CODE, rebuild=False):
 # ═════════════════════════ VWorld (주소 → 좌표) ═════════════════════════
 def vworld_key():
     here = os.path.dirname(os.path.abspath(__file__))
-    for d in [REPO_ROOT, here, DATA_ROOT, os.path.expanduser("~/Downloads"), os.path.expanduser("~/다운로드")]:
+    for d in [here, os.path.dirname(here), DATA_ROOT, os.path.expanduser("~/Downloads"), os.path.expanduser("~/다운로드")]:
         p = os.path.join(d, ".env") if d else ""
         if p and os.path.exists(p):
             for line in open(p, encoding="utf-8", errors="ignore"):
@@ -582,16 +658,18 @@ def _local_geocoder():
     return geo
 
 
-def butt_places(records=None):
+def butt_places(records=None, fresh=False):
     """꽁초 적발 장소별 [장소, 적발건수, 위도, 경도, 방식]. VWorld(키 있을 때) → 실패한 곳만 로컬 방식"""
     cp = out_path("정답_꽁초적발_장소좌표.csv")
     if EDA_ROOT is not None:
         # 적발 건수는 전처리 행에서 다시 집계하고, 기존 결과에서는 주소별 좌표만 가져온다.
         records = load_butt_records() if records is None else records
         counts = records["장소"].value_counts().rename_axis("장소").reset_index(name="적발건수")
-        source = RAW_OUT_DIR / "정답_꽁초적발_장소좌표.csv"
+        source = precomputed("정답_꽁초적발_장소좌표.csv")
         if not source.is_file():
-            raise FileNotFoundError(f"전처리 적발표에는 좌표가 없습니다. 0_VWorld_좌표찾기.py로 좌표표를 준비하세요: {source}")
+            raise FileNotFoundError("정답_꽁초적발_장소좌표.csv가 없습니다. 드라이브 processed_data에서 받아 두거나 "
+                                    f"0_VWorld_좌표찾기.py로 만드세요: {source}")
+        log(f"정답 좌표표: {source}")
         xy = read_csv_any(source, usecols=["장소", "위도", "경도", "방식"]).dropna(subset=["장소", "위도", "경도"])
         places = counts.merge(xy.drop_duplicates(), on="장소", how="left", validate="one_to_one")
         matched = places.loc[places["위도"].notna(), "적발건수"].sum()
@@ -599,8 +677,9 @@ def butt_places(records=None):
         save(places, "정답_꽁초적발_장소좌표.csv")
         return places
 
-    if os.path.exists(cp):
-        log(f"저장된 정답 좌표 사용: {cp}"); return pd.read_csv(cp)
+    ready = precomputed("정답_꽁초적발_장소좌표.csv")
+    if ready.is_file() and not fresh:   # fresh=True: 0_VWorld_좌표찾기.py가 새로 만들 때
+        log(f"저장된 정답 좌표 사용: {ready}"); return pd.read_csv(ready)
     d = load_butt_records()
     P = d["장소"].value_counts().rename_axis("장소").reset_index(name="적발건수")
     q = [_vworld_query(p) for p in P["장소"]]
@@ -669,15 +748,54 @@ def model_features(df):
     return [c for c in FEATURES if c in df.columns and c not in LEAK]
 
 
-def label_nodes(nodes, places, r=LABEL_R):
-    """걷는 길 지점이 꽁초 적발 장소에서 r m 안이면 1. 적발건수 합도 같이 반환"""
+def prepare_classifier(classifier, scale=False):
+    """모델의 fit에 전달된 학습 행으로만 결측값과 표준화 기준을 계산한다."""
+    from sklearn.impute import SimpleImputer
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    imputer = SimpleImputer(strategy="median", keep_empty_features=True).set_output(transform="pandas")
+    scaler = StandardScaler().set_output(transform="pandas") if scale else "passthrough"
+    return make_pipeline(imputer, scaler, classifier)
+
+
+def label_nodes(nodes, places):
+    """가장 가까운 적발 장소까지의 거리로 정답과 거리 등급을 만든다."""
     from scipy.spatial import cKDTree
-    P = places.dropna(subset=["위도"])
-    t = cKDTree(xy_m(nodes["위도"], nodes["경도"]))
-    y = np.zeros(len(nodes), int); n = np.zeros(len(nodes))
-    for idx, c in zip(t.query_ball_point(xy_m(P["위도"], P["경도"]), r), P["적발건수"]):
-        y[idx] = 1; n[idx] += c
-    return y, n
+
+    located = places.dropna(subset=["위도", "경도"])
+    if located.empty:
+        raise ValueError("정답을 만들 수 있는 꽁초 적발 장소 좌표가 없습니다.")
+    node_xy = xy_m(nodes["위도"], nodes["경도"])
+    place_xy = xy_m(located["위도"], located["경도"])
+    distance, _ = cKDTree(place_xy).query(node_xy)
+    levels = pd.cut(distance, [-np.inf, HIGH_R, MEDIUM_R, LABEL_R, np.inf],
+                    labels=DISTANCE_RISK_LEVELS)
+
+    counts = np.zeros(len(nodes))
+    nearby = cKDTree(node_xy).query_ball_point(place_xy, LABEL_R)
+    for indices, count in zip(nearby, located["적발건수"]):
+        counts[indices] += count
+
+    return pd.DataFrame({
+        "정답": (distance <= LABEL_R).astype(int),
+        "최근접_적발거리_m": distance,
+        "적발거리_위험등급": levels,
+        LABEL_COUNT_COLUMN: counts,
+    }, index=nodes.index)
+
+
+def summarize_distance_risk(data):
+    counts = data["적발거리_위험등급"].value_counts().reindex(DISTANCE_RISK_LEVELS, fill_value=0)
+    return pd.DataFrame({
+        "최근접 적발 거리": [
+            f"{HIGH_R}m 이내", f"{HIGH_R}m 초과~{MEDIUM_R}m 이내",
+            f"{MEDIUM_R}m 초과~{LABEL_R}m 이내", f"{LABEL_R}m 초과",
+        ],
+        "적발거리_위험등급": DISTANCE_RISK_LEVELS,
+        "정답": [1, 1, 1, 0],
+        "지점수": counts.to_numpy(),
+    })
 
 
 def spatial_blocks(nodes, size=1000):
@@ -690,13 +808,14 @@ def top_capture(y, s, k=0.10):
     return np.asarray(y)[o].sum() / max(1, np.asarray(y).sum())
 
 
-def save_risk_maps(df, hourly, FE, p, cv_predictions):
+def save_risk_maps(df, hourly, FE, p, test_predictions):
     """모델 예측을 기존 보행 지점·시간대별 격자 CSV 형식으로 저장한다."""
     df["위험확률"] = p.round(4)
     df["위험점수"] = (pd.Series(p).rank(pct=True) * 100).round(1)          # 강남구 안 순위(0~100)
     df["위험등급"] = pd.cut(df["위험점수"], [-1, 50, 70, 90, 100], labels=["보통", "약간 높음", "높음", "매우 높음(상위10%)"])
-    df["교차검증_예측"] = cv_predictions.round(4)                                 # 학습에 안 쓴 블록에서 나온 예측(검증용)
-    keep = ["노드 ID", "격자ID", "위도", "경도", "위험확률", "위험점수", "위험등급", "교차검증_예측", "정답", "적발건수_50m"] + FE
+    df["시험셋_예측"] = test_predictions.round(4)
+    keep = ["노드 ID", "격자ID", "위도", "경도", "위험확률", "위험점수", "위험등급", "시험셋_예측", "정답"]
+    keep += LABEL_DETAIL_COLUMNS + FE
     save(df[keep], "1_위험지도_지점.csv")
 
     # ── 시간대별 격자 위험: 격자 평균 위험점수 × (그 시간 생활인구 / 하루 최대 생활인구) ──
