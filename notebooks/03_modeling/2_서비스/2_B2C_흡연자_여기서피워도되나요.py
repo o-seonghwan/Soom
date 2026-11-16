@@ -52,7 +52,8 @@ def judge_points(lat, lon, T, risk=None):
     """여러 위치를 한 번에 판정. risk: 1번 결과(위도·경도·위험점수) 있으면 배려 판정에 씀"""
     P = C.xy_m(lat, lon)
     res = pd.DataFrame({"위도": lat, "경도": lon})
-    res["판정"] = "가능"; res["사유"] = ""
+    # 사유는 파이썬 문자열(object)로 둔다. pandas 3 + pyarrow 문자열이면 빈 목록을 더할 때 오류가 난다
+    res["판정"] = "가능"; res["사유"] = pd.Series([""] * len(res), index=res.index, dtype=object)
     for kind, r in BAN_R.items():
         t = T[T["종류"] == kind]
         if t.empty: continue
