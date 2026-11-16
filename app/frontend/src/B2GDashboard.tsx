@@ -135,6 +135,7 @@ export default function B2GDashboard() {
       {/* B2G 지도 */}
       <main className="relative min-h-0 flex-1">
         <MapView
+          audience="b2g"
           start={null}
           end={null}
           routes={[]}
