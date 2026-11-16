@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import MapView from "./components/MapView";
 import RiskLegend from "./components/RiskLegend";
 import ReportForm from "./components/ReportForm";
-import AdminDashboard from "./components/AdminDashboard";
 import RoutePanel from "./components/RoutePanel";
 
 import type {
@@ -27,7 +26,7 @@ import {
 } from "./services/reportService";
 
 
-type PageMode = "route" | "report" | "admin";
+type PageMode = "route" | "report";
 type LocationMode = "start" | "end";
 type SearchStatus = "idle" | "success" | "error";
 
@@ -312,10 +311,6 @@ export default function App() {
   // =======================================
 
   function handleMapClick(point: Coordinate) {
-    if (pageMode === "admin") {
-      return;
-    }
-
     if (pageMode === "report") {
       setReportLocation(point);
       setFocusPoint([...point]);
@@ -553,25 +548,6 @@ export default function App() {
 
 
   // =======================================
-  // 15. 관리자 지도 위치 이동
-  // =======================================
-
-  function focusReportLocation(point: Coordinate) {
-    setFocusPoint([...point]);
-    setShowReports(true);
-  }
-
-
-  // =======================================
-  // 16. 관리자 검토 후 공개 제보 재조회
-  // =======================================
-
-  async function handleReviewCompleted() {
-    await refreshPublicReports();
-  }
-
-
-  // =======================================
   // 17. 화면
   // =======================================
 
@@ -613,7 +589,7 @@ export default function App() {
       <section className="z-[1000] max-h-[55dvh] overflow-y-auto bg-white p-4 shadow-lg">
 
         {/* 탭 전환 */}
-        <div className="mb-4 grid grid-cols-3 gap-2">
+        <div className="mb-4 grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => changePage("route")}
@@ -638,17 +614,6 @@ export default function App() {
             흡연 제보
           </button>
 
-          <button
-            type="button"
-            onClick={() => changePage("admin")}
-            className={`rounded-lg p-3 text-sm font-bold ${
-              pageMode === "admin"
-                ? "bg-slate-700 text-white"
-                : "bg-gray-100 text-gray-700"
-            }`}
-          >
-            관리자
-          </button>
         </div>
 
         {/* 경로 탐색 탭 */}
@@ -700,16 +665,6 @@ export default function App() {
               </p>
             )}
           </div>
-        )}
-
-        {/* 관리자 탭 */}
-        {pageMode === "admin" && (
-          <AdminDashboard
-            reports={reports}
-            risks={risks}
-            onFocusLocation={focusReportLocation}
-            onReviewCompleted={handleReviewCompleted}
-          />
         )}
 
         {/* 기존 지도 표시 설정 */}
