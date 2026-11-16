@@ -20,7 +20,6 @@ import type { Coordinate, Route } from "../types/route";
 import type { RiskLocation } from "../types/risk";
 import type { Report } from "../types/report";
 
-import { getRiskColor } from "../utils/riskColor";
 import type { CleanEdgeFeature } from "../types/cleanliness";
 import B2GHeatmap from "./B2GHeatmap";
 import "leaflet/dist/leaflet.css";
@@ -279,8 +278,8 @@ export default function MapView({
               radius={risk.radiusM}
               bubblingMouseEvents={false}
               pathOptions={{
-                color: audience === "b2g" ? getRiskColor(risk.score) : "#64748b",
-                fillColor: audience === "b2g" ? getRiskColor(risk.score) : "#93c5d6",
+                color: "#64748b",
+                fillColor: "#93c5d6",
                 fillOpacity: 0.35,
                 weight: 1,
               }}
