@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from model_risk_adapter import load_model_risks
-from risk_provider import get_risk_snapshot
+from risk_provider import get_risk_snapshot, verify_model_edge_coverage
 
 
 class ModelRiskAdapterTests(unittest.TestCase):
@@ -67,6 +67,17 @@ class ModelRiskAdapterTests(unittest.TestCase):
         with patch.dict(os.environ, {"LUNG_RISK_CSV": str(self.path)}):
             with self.assertRaises(FileNotFoundError):
                 get_risk_snapshot()
+
+    def test_model_graph_without_covered_edges_fails(self):
+        with self.assertRaisesRegex(ValueError, "보행 네트워크"):
+            verify_model_edge_coverage({"source": "model-csv"}, {})
+
+    def test_mock_graph_without_covered_edges_is_allowed(self):
+        verify_model_edge_coverage({"source": "mock"}, {})
+
+    def test_model_graph_with_covered_edges_is_allowed(self):
+        verify_model_edge_coverage({"source": "model-csv"}, {("a", "b", 0): {"score": 80}})
+
 
 
 if __name__ == "__main__":
