@@ -25,6 +25,7 @@ from walking_router import (
 from safe_router import calculate_safest_route
 from b2g_cleanliness import edge_cleanliness_geojson
 from risk_provider import get_risk_snapshot
+from smoking_zones import load_smoking_zones
 
 from risk_mapper import (
     map_risks_to_edges,
@@ -285,6 +286,15 @@ def compare_routes(
 
     except Exception as error:
         handle_route_error(error)
+
+
+@app.get("/api/smoking-zones")
+def smoking_zones():
+    """Return declared smoking locations only; empty when no official CSV configured."""
+    try:
+        return load_smoking_zones()
+    except (ValueError, FileNotFoundError) as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 @app.get("/api/risks")
