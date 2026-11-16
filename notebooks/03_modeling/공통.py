@@ -97,6 +97,26 @@ F = dict(
 def log(*a): print("▶", *a, flush=True)
 
 
+def precomputed(name):
+    """VWorld로 미리 만든 좌표 파일 위치. 결과/ 폴더를 먼저 보고, 없으면 전처리본 폴더(processed_data 등)에서 찾는다."""
+    first = RAW_OUT_DIR / name
+    if first.is_file():
+        return first
+    folders = []
+    if os.environ.get("LUNG_EDA_ROOT"):
+        folders.append(Path(os.environ["LUNG_EDA_ROOT"]).resolve())
+    found = _layout_dirs()
+    if found is not None:
+        folders.append(found[0])
+    for folder in folders:
+        if (folder / name).is_file():
+            return folder / name
+        hits = sorted(folder.rglob(name)) if folder.is_dir() else []
+        if hits:
+            return hits[0]
+    return first
+
+
 def use_preprocessed_data():
     """1·4번에서 전처리본을 우선 사용하고 원본 기반 결과와 캐시를 분리한다."""
     global EDA_ROOT, OUT_DIR
@@ -638,16 +658,18 @@ def _local_geocoder():
     return geo
 
 
-def butt_places(records=None):
+def butt_places(records=None, fresh=False):
     """꽁초 적발 장소별 [장소, 적발건수, 위도, 경도, 방식]. VWorld(키 있을 때) → 실패한 곳만 로컬 방식"""
     cp = out_path("정답_꽁초적발_장소좌표.csv")
     if EDA_ROOT is not None:
         # 적발 건수는 전처리 행에서 다시 집계하고, 기존 결과에서는 주소별 좌표만 가져온다.
         records = load_butt_records() if records is None else records
         counts = records["장소"].value_counts().rename_axis("장소").reset_index(name="적발건수")
-        source = RAW_OUT_DIR / "정답_꽁초적발_장소좌표.csv"
+        source = precomputed("정답_꽁초적발_장소좌표.csv")
         if not source.is_file():
-            raise FileNotFoundError(f"전처리 적발표에는 좌표가 없습니다. 0_VWorld_좌표찾기.py로 좌표표를 준비하세요: {source}")
+            raise FileNotFoundError("정답_꽁초적발_장소좌표.csv가 없습니다. 드라이브 processed_data에서 받아 두거나 "
+                                    f"0_VWorld_좌표찾기.py로 만드세요: {source}")
+        log(f"정답 좌표표: {source}")
         xy = read_csv_any(source, usecols=["장소", "위도", "경도", "방식"]).dropna(subset=["장소", "위도", "경도"])
         places = counts.merge(xy.drop_duplicates(), on="장소", how="left", validate="one_to_one")
         matched = places.loc[places["위도"].notna(), "적발건수"].sum()
@@ -655,8 +677,9 @@ def butt_places(records=None):
         save(places, "정답_꽁초적발_장소좌표.csv")
         return places
 
-    if os.path.exists(cp):
-        log(f"저장된 정답 좌표 사용: {cp}"); return pd.read_csv(cp)
+    ready = precomputed("정답_꽁초적발_장소좌표.csv")
+    if ready.is_file() and not fresh:   # fresh=True: 0_VWorld_좌표찾기.py가 새로 만들 때
+        log(f"저장된 정답 좌표 사용: {ready}"); return pd.read_csv(ready)
     d = load_butt_records()
     P = d["장소"].value_counts().rename_axis("장소").reset_index(name="적발건수")
     q = [_vworld_query(p) for p in P["장소"]]

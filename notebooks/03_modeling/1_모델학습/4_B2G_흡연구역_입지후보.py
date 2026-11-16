@@ -55,6 +55,19 @@ BOOTHS = {  # 강남구 기존 분리형 흡연부스 (강남구 소식지 vol.3
     "테헤란로 424 부스": "테헤란로424", "테헤란로 124 부스": "테헤란로124"}
 
 
+def precomputed(name):
+    """VWorld로 미리 만든 좌표 파일: 결과/ 폴더 → 전처리본 폴더(processed_data, data/processed) 순서로 찾는다."""
+    if (RESULT / name).is_file():
+        return RESULT / name
+    folders = [os.environ.get("LUNG_EDA_ROOT", ""), str(Path(DRIVE_ROOT) / "processed_data") if DRIVE_ROOT else "",
+               *[str(p / sub) for p in (HERE, *list(HERE.parents)[:3]) for sub in ("processed_data", os.path.join("data", "processed"))]]
+    for folder in [Path(f) for f in folders if f and os.path.isdir(f)]:
+        hits = [folder / name] if (folder / name).is_file() else sorted(folder.rglob(name))
+        if hits:
+            return hits[0]
+    raise FileNotFoundError(f"{name}이 없습니다. 드라이브 processed_data에서 받아 두세요.")
+
+
 def find(pattern):
     for root in [r for r in DATA_ROOTS if r and os.path.isdir(r)]:
         hits = sorted(glob.glob(os.path.join(root, "**", pattern), recursive=True))
@@ -80,7 +93,7 @@ def load():
     nodes = pd.read_csv(EDA / "1_학습용_지점_21m.csv", encoding="utf-8-sig")
     links = pd.read_csv(EDA / "특성_강남구" / "보행링크.csv", encoding="utf-8-sig")
     places = pd.read_csv(EDA / "정답_꽁초적발_장소좌표.csv", encoding="utf-8-sig").dropna(subset=["위도"])
-    recs = read_any(RESULT / "강남_꽁초적발_전체기록_좌표.csv")
+    recs = read_any(precomputed("강남_꽁초적발_전체기록_좌표.csv"))
     recs = recs[recs["좌표있음"] == 1].copy()
     recs["연도"] = pd.to_datetime(recs["위반일시"], errors="coerce").dt.year
     zones = read_any(find("nosmoking_zones_seoul.csv"), dtype=str)

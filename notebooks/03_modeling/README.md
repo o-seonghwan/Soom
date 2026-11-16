@@ -30,13 +30,14 @@ python 2_서비스/3_B2G_비흡연자_아동간접흡연보호리포트.py
 
 저장소 구조라면 `data/processed/`에 전처리본(생활인구 `local_resd_250m*`, 도보 네트워크, 강남구 꽁초 적발, 마포구 꽁초), `data/raw/` 아래 어디든 원본(상가, 버스정류소, 금연구역, 어린이집, 건물 `AL_D010*.zip`, 천식, 흡연단속)이 있으면 됩니다. 데이터 폴더는 .gitignore 대상이라 팀 드라이브에서 받아 넣어 주세요.
 
-## 실행 전에 필요한 파일 (깃허브에 없음)
-`결과/` 폴더에 아래 세 파일이 있어야 합니다. VWorld 조회 결과라 약관상 저장소에 올리지 않습니다.
-- `결과/정답_꽁초적발_장소좌표.csv`
-- `결과/vworld_캐시_꽁초.csv`
-- `결과/강남_꽁초적발_전체기록_좌표.csv`
+## VWorld 좌표 파일 (깃허브에 없음)
+아래 두 파일은 팀 드라이브 `processed_data/` 바로 아래에 있습니다. 드라이브의 `processed_data/` 폴더를 통째로 받으면 함께 받아집니다.
+- `정답_꽁초적발_장소좌표.csv` (정답 라벨)
+- `강남_꽁초적발_전체기록_좌표.csv` (입지 후보 군집)
 
-팀 공유 폴더에서 받거나, `.env`에 `VWORLD_API_KEY`를 넣고 `python 3_선택/0_VWorld_좌표찾기.py`로 다시 만듭니다. `.env`도 올리지 마세요.
+코드는 `결과/` 폴더를 먼저 보고, 없으면 `processed_data/`(또는 `data/processed/`)에서 찾습니다.
+두 파일은 진성이 `3_선택/0_VWorld_좌표찾기.py`로 만든 것입니다. VWorld 이용약관 때문에 저장소에는 올리지 않습니다.
+새로 만들려면 `.env`에 `VWORLD_API_KEY`를 넣고 실행합니다. 이때 VWorld 응답에 따라 숫자가 조금 달라질 수 있습니다. `.env`는 올리지 마세요.
 
 ## 필요한 패키지
 pandas, numpy, scikit-learn, scipy, geopandas, shapely, pyogrio, networkx, openpyxl, requests, xgboost, lightgbm, joblib

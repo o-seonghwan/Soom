@@ -21,7 +21,7 @@ if __name__ == "__main__":
     if os.path.exists(p):
         os.remove(p)      # 예전(로컬 방식) 정답 좌표는 지우고 새로 만듦. VWorld 응답 캐시는 남겨 둠
         C.log("예전 정답 좌표 파일을 지우고 새로 만듭니다.")
-    P = C.butt_places()
+    P = C.butt_places(fresh=True)
     ok = P["위도"].notna()
     print(f"\n완료: 장소 {ok.sum():,}/{len(P):,}곳, 적발 {P.loc[ok, '적발건수'].sum():,}/{P['적발건수'].sum():,}건")
     print("방식별 장소 수:", P.loc[ok, "방식"].str.split(":").str[0].value_counts().to_dict())
