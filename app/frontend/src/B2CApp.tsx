@@ -119,22 +119,22 @@ export default function App() {
 
   // Geocoding is for display only; route coordinates remain unchanged.
   useEffect(() => {
-    if (!start) { setStartAddress(null); return; }
+    if (!start) return;
     const controller = new AbortController();
     void lookupAddress(start, controller.signal)
       .then(setStartAddress)
       .catch(error => { if (!controller.signal.aborted) { console.warn("출발지 주소 조회:", error); setStartAddress(null); } });
     return () => controller.abort();
-  }, [start?.[0], start?.[1]]);
+  }, [start]);
 
   useEffect(() => {
-    if (!end) { setEndAddress(null); return; }
+    if (!end) return;
     const controller = new AbortController();
     void lookupAddress(end, controller.signal)
       .then(setEndAddress)
       .catch(error => { if (!controller.signal.aborted) { console.warn("목적지 주소 조회:", error); setEndAddress(null); } });
     return () => controller.abort();
-  }, [end?.[0], end?.[1]]);
+  }, [end]);
 
   const [avoidanceLevel, setAvoidanceLevel] =
     useState<RouteRequest["avoidanceLevel"]>("medium");
@@ -331,9 +331,11 @@ export default function App() {
   ) {
     if (mode === "start") {
       setStart(point);
+      setStartAddress(null);
       setStartText(formatCoordinate(point));
     } else {
       setEnd(point);
+      setEndAddress(null);
       setEndText(formatCoordinate(point));
     }
 
@@ -434,6 +436,8 @@ export default function App() {
     if (searchInProgress.current) return;
     setStart(end);
     setEnd(start);
+    setStartAddress(endAddress);
+    setEndAddress(startAddress);
     setStartText(end ? formatCoordinate(end) : "");
     setEndText(start ? formatCoordinate(start) : "");
     setSelectionMode(start ? "end" : "start");
@@ -511,6 +515,8 @@ export default function App() {
 
     setStart(null);
     setEnd(null);
+    setStartAddress(null);
+    setEndAddress(null);
 
     setStartText("");
     setEndText("");
