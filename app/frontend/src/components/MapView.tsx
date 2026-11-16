@@ -21,6 +21,8 @@ import type { RiskLocation } from "../types/risk";
 import type { Report } from "../types/report";
 
 import { getRiskColor } from "../utils/riskColor";
+import type { CleanEdgeFeature } from "../types/cleanliness";
+import B2GHeatmap from "./B2GHeatmap";
 import "leaflet/dist/leaflet.css";
 
 // 강남구 지도 중심 (초기 임시 위치)
@@ -35,6 +37,7 @@ interface MapViewProps {
   end: Coordinate | null;
   routes: Route[];
   risks: RiskLocation[];
+  cleanlinessEdges?: CleanEdgeFeature[];
   reports: Report[];
   showRisks: boolean;
   showReports: boolean;
@@ -167,6 +170,7 @@ export default function MapView({
   end,
   routes,
   risks,
+  cleanlinessEdges,
   reports,
   showRisks,
   showReports,
@@ -261,8 +265,13 @@ export default function MapView({
           />
         )}
 
-        {/* 위치별 간접흡연 위험도 */}
-        {showRisks &&
+        {/* B2G 전용: 보행선 주변 청정지수 반투명 히트맵 */}
+        {audience === "b2g" && showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
+          <B2GHeatmap edges={cleanlinessEdges} />
+        )}
+
+        {/* 기존 위치별 위험도 원형: B2C 화면 그대로 유지 */}
+        {audience !== "b2g" && showRisks &&
           risks.map((risk) => (
             <Circle
               key={risk.id}
