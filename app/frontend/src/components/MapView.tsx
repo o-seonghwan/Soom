@@ -15,7 +15,7 @@ import {
   useMapEvents,
 } from "react-leaflet";
 
-import type { GeoJsonObject } from "geojson";
+import type { Feature, GeoJsonObject, Polygon } from "geojson";
 import type { Coordinate, Route } from "../types/route";
 import type { RiskLocation } from "../types/risk";
 import type { Report } from "../types/report";
@@ -108,13 +108,19 @@ function BoundaryFocus({
 // 강남구 바깥 영역을 가리는 마스크 생성
 function createOutsideMask(
   boundary: GeoJsonObject
-): GeoJsonObject {
+): Feature<Polygon> {
   const geojson = L.geoJSON(boundary).toGeoJSON();
 
   // 강남구 경계 좌표들을 마스크의 구멍으로 사용
   const holes: number[][][] = [];
 
-  for (const feature of geojson.features) {
+  const features = geojson.type === "FeatureCollection"
+    ? geojson.features
+    : geojson.type === "Feature"
+      ? [geojson]
+      : [];
+
+  for (const feature of features) {
     const geometry = feature.geometry;
 
     if (!geometry) continue;
