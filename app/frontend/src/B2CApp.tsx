@@ -596,8 +596,8 @@ export default function App() {
           !riskError && cleanlinessEdges.length > 0 && (
             <div className="absolute bottom-14 left-3 z-[500] rounded-xl bg-white/95 p-3 text-xs shadow-lg">
               <p className="font-bold text-slate-800">보행로 청정지수 · AI 모델</p>
-              <p className="mt-1 text-gray-600">연두색이 진할수록 청정지수가 낮음</p>
-              <div className="mt-2 h-2 w-44 rounded" style={{background: "linear-gradient(90deg, rgba(132,204,22,0.85), rgba(132,204,22,0.18))"}} />
+              <p className="mt-1 text-gray-600">연두색이 진할수록 청정지수가 높음</p>
+              <div className="mt-2 h-2 w-44 rounded" style={{background: "linear-gradient(90deg, rgba(132,204,22,0.18), rgba(132,204,22,0.85))"}} />
               <div className="mt-1 flex justify-between text-gray-500"><span>청정지수 낮음</span><span>청정지수 높음</span></div>
               <p className="mt-2 text-[10px] text-gray-500">모델 예측 기반 · 실측 대기질 아님</p>
             </div>
