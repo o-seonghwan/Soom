@@ -22,6 +22,7 @@ import type { Report } from "../types/report";
 
 import { getCleanColor } from "../utils/cleanColor";
 import type { CleanEdgeFeature } from "../types/cleanliness";
+import { deduplicateCleanEdges } from "../utils/deduplicateCleanEdges";
 import "leaflet/dist/leaflet.css";
 
 // 강남구 지도 중심 (초기 임시 위치)
@@ -268,7 +269,12 @@ export default function MapView({
         {showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
           <GeoJSON
             key={`clean-roads-${audience}-${cleanlinessEdges.length}`}
-            data={{ type: "FeatureCollection", features: cleanlinessEdges } as FeatureCollection}
+            data={{
+              type: "FeatureCollection",
+              features: audience === "b2c"
+                ? deduplicateCleanEdges(cleanlinessEdges)
+                : cleanlinessEdges,
+            } as FeatureCollection}
             style={(feature) => {
               const raw = Number(feature?.properties?.cleanIndex);
               const clean = Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : 100;
