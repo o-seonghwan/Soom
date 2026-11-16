@@ -30,6 +30,7 @@ const GANGNAM_CENTER: Coordinate = [
 ];
 
 interface MapViewProps {
+  audience?: "b2c" | "b2g";
   start: Coordinate | null;
   end: Coordinate | null;
   routes: Route[];
@@ -155,6 +156,7 @@ const reportLabels: Record<Report["type"], string> = {
 };
 
 export default function MapView({
+  audience = "b2c",
   start,
   end,
   routes,
@@ -262,8 +264,8 @@ export default function MapView({
               radius={risk.radiusM}
               bubblingMouseEvents={false}
               pathOptions={{
-                color: getRiskColor(risk.score),
-                fillColor: getRiskColor(risk.score),
+                color: audience === "b2g" ? getRiskColor(risk.score) : "#64748b",
+                fillColor: audience === "b2g" ? getRiskColor(risk.score) : "#93c5d6",
                 fillOpacity: 0.35,
                 weight: 1,
               }}
@@ -340,8 +342,12 @@ export default function MapView({
               radius={7}
               bubblingMouseEvents={false}
               pathOptions={{
-                color: "#7e22ce",
-                fillColor: "#a855f7",
+                color: audience === "b2g"
+                  ? report.status === "pending" ? "#b45309" : report.status === "verified" ? "#15803d" : "#475569"
+                  : "#7e22ce",
+                fillColor: audience === "b2g"
+                  ? report.status === "pending" ? "#fbbf24" : report.status === "verified" ? "#22c55e" : "#94a3b8"
+                  : "#a855f7",
                 fillOpacity: 0.9,
                 weight: 2,
               }}
@@ -351,6 +357,11 @@ export default function MapView({
                   {reportLabels[report.type]}
                 </strong>
 
+                {audience === "b2g" && (
+                  <div>
+                    신고 상태: {report.status === "pending" ? "검토 대기" : report.status === "verified" ? "승인" : "반려"}
+                  </div>
+                )}
                 <div>
                   목격 시간:{" "}
                   {new Date(
@@ -394,6 +405,20 @@ export default function MapView({
           </CircleMarker>
         )}
       </MapContainer>
+
+      {audience === "b2g" && showReports && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex flex-wrap gap-3 rounded-lg bg-white/95 px-3 py-2 text-xs shadow">
+          <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-amber-400" />검토 대기</span>
+          <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-green-500" />승인</span>
+          <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-slate-400" />반려</span>
+        </div>
+      )}
+
+      {!import.meta.env.VITE_CARTO_API_KEY && (
+        <div role="status" className="pointer-events-none absolute left-3 top-3 z-[500] max-w-64 rounded-lg bg-amber-50/95 px-3 py-2 text-xs text-amber-900 shadow">
+          CARTO 지도 API 키가 없습니다. app/frontend/.env.local에 VITE_CARTO_API_KEY를 설정하세요.
+        </div>
+      )}
 
       {/* 강남구 경계 안내 */}
       <div className="pointer-events-none absolute right-3 top-3 z-[500] rounded-lg bg-white/95 px-3 py-2 text-xs shadow">
