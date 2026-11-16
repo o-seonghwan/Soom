@@ -39,6 +39,10 @@ jobs:
         run: python -m unittest discover -s app/backend -p "test_b2g_cleanliness.py" -v
       - name: Test avoidance simulation path metrics
         run: python -m unittest discover -s app/backend -p "test_avoidance_simulation.py" -v
+      - name: Test smoking area CSV validation
+        run: python -m unittest discover -s app/backend -p "test_smoking_zones.py" -v
+      - name: Test address reverse geocoding adapter
+        run: python -m unittest discover -s app/backend -p "test_address_lookup.py" -v
       - name: Validate Jupyter notebooks
         run: |
           python - <<'PY'

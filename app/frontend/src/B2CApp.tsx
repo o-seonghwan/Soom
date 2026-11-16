@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import MapView from "./components/MapView";
 import ReportForm from "./components/ReportForm";
 import RoutePanel from "./components/RoutePanel";
+import RouteResultPanel from "./components/RouteResultPanel";
+import { lookupAddress } from "./services/addressService";
 
 import type {
   Coordinate,
@@ -27,7 +29,7 @@ import {
 } from "./services/reportService";
 
 
-type PageMode = "route" | "report";
+type PageMode = "route" | "shortest" | "safest" | "report";
 type LocationMode = "start" | "end";
 type SearchStatus = "idle" | "success" | "error";
 
@@ -91,6 +93,8 @@ export default function App() {
   const [pageMode, setPageMode] =
     useState<PageMode>("route");
 
+  const [showControls, setShowControls] = useState(false);
+
   const [selectionMode, setSelectionMode] =
     useState<LocationMode>("start");
 
@@ -109,6 +113,28 @@ export default function App() {
 
   const [startText, setStartText] = useState("");
   const [endText, setEndText] = useState("");
+  const [startAddress, setStartAddress] = useState<string | null>(null);
+  const [endAddress, setEndAddress] = useState<string | null>(null);
+  const [showCoordinates, setShowCoordinates] = useState(false);
+
+  // Geocoding is for display only; route coordinates remain unchanged.
+  useEffect(() => {
+    if (!start) return;
+    const controller = new AbortController();
+    void lookupAddress(start, controller.signal)
+      .then(setStartAddress)
+      .catch(error => { if (!controller.signal.aborted) { console.warn("출발지 주소 조회:", error); setStartAddress(null); } });
+    return () => controller.abort();
+  }, [start]);
+
+  useEffect(() => {
+    if (!end) return;
+    const controller = new AbortController();
+    void lookupAddress(end, controller.signal)
+      .then(setEndAddress)
+      .catch(error => { if (!controller.signal.aborted) { console.warn("목적지 주소 조회:", error); setEndAddress(null); } });
+    return () => controller.abort();
+  }, [end]);
 
   const [avoidanceLevel, setAvoidanceLevel] =
     useState<RouteRequest["avoidanceLevel"]>("medium");
@@ -305,9 +331,11 @@ export default function App() {
   ) {
     if (mode === "start") {
       setStart(point);
+      setStartAddress(null);
       setStartText(formatCoordinate(point));
     } else {
       setEnd(point);
+      setEndAddress(null);
       setEndText(formatCoordinate(point));
     }
 
@@ -371,45 +399,50 @@ export default function App() {
   // 10. 현재 위치를 출발지로 설정
   // =======================================
 
-  function useCurrentLocation() {
-    if (searchInProgress.current) {
-      return;
-    }
-
+  function requestCurrentLocation(mode: "start" | "focus") {
+    if (searchInProgress.current) return;
     if (!navigator.geolocation) {
-      window.alert(
-        "현재 위치 기능을 지원하지 않습니다."
-      );
+      window.alert("현재 위치 기능을 지원하지 않습니다.");
       return;
     }
+    const purpose = mode === "start"
+      ? "현재 위치를 출발지에 입력하려면 위치 정보 사용에 동의해주세요. 동의한 경우에만 브라우저에 위치 권한을 요청합니다."
+      : "현재 위치로 지도를 이동하려면 위치 정보 사용에 동의해주세요. 위치를 경로 출발지로 저장하지 않습니다.";
+    if (!window.confirm(purpose)) return;
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (searchInProgress.current) {
-          return;
+      position => {
+        const point: Coordinate = [position.coords.latitude, position.coords.longitude];
+        if (mode === "start") {
+          updateLocation("start", point);
+          setSelectionMode("end");
+        } else {
+          setFocusPoint([...point]);
         }
-
-        const point: Coordinate = [
-          position.coords.latitude,
-          position.coords.longitude,
-        ];
-
-        updateLocation("start", point);
-        setSelectionMode("end");
       },
-      (error) => {
+      error => {
         console.error("위치 조회 오류:", error);
-
-        window.alert(
-          "현재 위치 확인에 실패했습니다."
-        );
+        window.alert("위치를 확인하지 못했습니다. 브라우저의 위치 접근 권한과 HTTPS 또는 localhost 실행 여부를 확인하세요.");
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
+  }
+
+  function useCurrentLocation() {
+    requestCurrentLocation("start");
+  }
+
+  function swapLocations() {
+    if (searchInProgress.current) return;
+    setStart(end);
+    setEnd(start);
+    setStartAddress(endAddress);
+    setEndAddress(startAddress);
+    setStartText(end ? formatCoordinate(end) : "");
+    setEndText(start ? formatCoordinate(start) : "");
+    setSelectionMode(start ? "end" : "start");
+    setFocusPoint(null);
+    clearSearchResult();
   }
 
 
@@ -443,6 +476,9 @@ export default function App() {
 
       setRoutes(result.routes);
       setSearchStatus("success");
+      // Collapse overlays so both complete route lines remain visible.
+      setShowControls(false);
+      setPageMode("shortest");
     } catch (error) {
       console.error("경로 탐색 오류:", error);
 
@@ -480,6 +516,8 @@ export default function App() {
 
     setStart(null);
     setEnd(null);
+    setStartAddress(null);
+    setEndAddress(null);
 
     setStartText("");
     setEndText("");
@@ -575,7 +613,7 @@ export default function App() {
         </p>
       </header>
 
-      {/* 지도 */}
+      {/* 전체 높이 지도 + 접을 수 있는 설정 패널 */}
       <main className="relative min-h-0 flex-1">
         <MapView
           start={start}
@@ -588,6 +626,14 @@ export default function App() {
           showReports={showReports}
           reportLocation={reportLocation}
           focusPoint={focusPoint}
+          selectionMode={selectionMode}
+          startAddress={startAddress}
+          endAddress={endAddress}
+          routeLoading={loading}
+          onSearch={() => void handleSearch()}
+          onSelectLocation={setSelectionMode}
+          onSwapLocations={swapLocations}
+          onLocate={() => requestCurrentLocation("focus")}
           onMapClick={handleMapClick}
         />
 
@@ -602,64 +648,74 @@ export default function App() {
               <p className="mt-2 text-[10px] text-gray-500">15레벨 이상 확대 시 표시 · 모델 예측 기반 · 실측 대기질 아님</p>
             </div>
           )}
-      </main>
+        <button type="button" onClick={() => setShowControls(value => !value)}
+          aria-expanded={showControls}
+          className="absolute left-3 top-36 z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
+          {showControls ? "설정 닫기 ×" : routes.length > 0 ? "경로 결과 · 회피 강도 ☰" : "회피 강도 · 제보 ☰"}
+        </button>
 
-      {/* 하단 패널 */}
-      <section className="z-[1000] max-h-[55dvh] overflow-y-auto bg-white p-4 shadow-lg">
+      {/* 경로 설정과 제보 폼은 필요할 때만 열어서 지도를 가리지 않도록 함 */}
+      {showControls && (
+      <section className="absolute left-3 top-48 z-[700] max-h-[min(56dvh,calc(100%-210px))] w-[min(390px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
 
-        {/* 탭 전환 */}
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => changePage("route")}
-            className={`rounded-lg p-3 text-sm font-bold ${
-              pageMode === "route"
-                ? "bg-green-600 text-white"
-                : "bg-gray-100 text-gray-700"
-            }`}
-          >
-            경로 탐색
-          </button>
-
-          <button
-            type="button"
-            onClick={() => changePage("report")}
-            className={`rounded-lg p-3 text-sm font-bold ${
-              pageMode === "report"
-                ? "bg-purple-600 text-white"
-                : "bg-gray-100 text-gray-700"
-            }`}
-          >
-            흡연 제보
-          </button>
-
+        {/* 회피 강도/결과를 별도 탭으로 구분 */}
+        <div className="mb-4 grid grid-cols-4 gap-1">
+          {([
+            ["route", "회피 강도"],
+            ["shortest", "최단 경로"],
+            ["safest", "회피 경로"],
+            ["report", "흡연 제보"],
+          ] as const).map(([mode, label]) => (
+            <button key={mode} type="button" onClick={() => changePage(mode)}
+              className={`rounded-lg p-2 text-xs font-bold ${pageMode === mode ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-700"}`}>
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* 경로 탐색 탭 */}
         {pageMode === "route" && (
-          <RoutePanel
-            start={start}
-            end={end}
-            startText={startText}
-            endText={endText}
-            selectionMode={selectionMode}
-            avoidanceLevel={avoidanceLevel}
-            routes={routes}
-            loading={loading}
-            elapsedSeconds={elapsedSeconds}
-            searchStatus={searchStatus}
-            onStartTextChange={setStartText}
-            onEndTextChange={setEndText}
-            onApplyCoordinate={applyCoordinate}
-            onSelectLocation={setSelectionMode}
-            onUseCurrentLocation={useCurrentLocation}
-            onAvoidanceLevelChange={(value) => {
-              setAvoidanceLevel(value);
-              clearSearchResult();
-            }}
-            onSearch={() => void handleSearch()}
-            onReset={resetRoute}
-          />
+          <RoutePanel avoidanceLevel={avoidanceLevel} loading={loading}
+            onAvoidanceLevelChange={value => { setAvoidanceLevel(value); clearSearchResult(); }} />
+        )}
+
+        {pageMode === "shortest" && (
+          <RouteResultPanel type="shortest" route={routes.find(route => route.id === "shortest")} />
+        )}
+
+        {pageMode === "safest" && (
+          <RouteResultPanel type="safest" route={routes.find(route => route.id !== "shortest")} />
+        )}
+
+        {loading && <p role="status" className="mt-3 text-xs text-slate-600">경로 계산 중... {elapsedSeconds.toFixed(1)}초</p>}
+        {!loading && searchStatus === "error" && <p role="alert" className="mt-3 text-xs text-red-600">경로 탐색에 실패했습니다.</p>}
+
+        {/* 기존 수동 좌표 입력은 별도 접이식 도구로 보존 */}
+        {pageMode !== "report" && (
+          <div className="mt-3 border-t pt-3">
+            <button type="button" onClick={() => setShowCoordinates(value => !value)}
+              className="text-xs font-semibold text-slate-600">
+              {showCoordinates ? "좌표 직접 입력 닫기 ▲" : "좌표 직접 입력 ▼"}
+            </button>
+            {showCoordinates && (
+              <div className="mt-2 space-y-2">
+                {(["start", "end"] as const).map(mode => (
+                  <div key={mode} className="flex items-center gap-2">
+                    <input aria-label={mode === "start" ? "출발지 좌표" : "목적지 좌표"}
+                      placeholder={mode === "start" ? "출발지 위도, 경도" : "목적지 위도, 경도"}
+                      value={mode === "start" ? startText : endText}
+                      onChange={event => mode === "start" ? setStartText(event.target.value) : setEndText(event.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border p-2 text-xs" />
+                    <button type="button" onClick={() => applyCoordinate(mode)}
+                      className="rounded-lg bg-slate-100 px-3 py-2 text-xs">적용</button>
+                  </div>
+                ))}
+                <button type="button" onClick={useCurrentLocation} className="rounded-lg border px-3 py-2 text-xs">
+                  동의 후 현재 위치를 출발지로 지정
+                </button>
+                <button type="button" onClick={resetRoute} className="ml-2 rounded-lg border px-3 py-2 text-xs">경로 초기화</button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* 흡연 제보 탭 */}
@@ -744,6 +800,8 @@ export default function App() {
           반영되지 않습니다.
         </p>
       </section>
+      )}
+      </main>
     </div>
   );
 }
