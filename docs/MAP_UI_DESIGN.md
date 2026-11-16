@@ -41,3 +41,61 @@ python -m uvicorn main:app --reload
 - `python -m unittest discover -s app/backend -p "test_smoking_zones.py" -v`
 - `cd app/frontend; npm run build; npm run lint`
 - 실제 브라우저 수동 검증은 아직 필요: 작은 화면에서 경로 카드와 서비스 다시 선택 버튼 겹침, 현재 위치 권한 거절, 출발/목적지 교환, 먼 거리 경로 전체 보기, 흡연 시설 좌표 마커 표시.
+
+
+## 2026-11-16 후속 UI 개편
+
+- B2C 경로: 최단 `#343A40`, 회피 `#72EFDD` (지도 선과 경로 결과 카드 배경 동일).
+- 좌상단 경로 카드에서 **경로 탐색** 가능. 출발지/목적지의 표시명은 역지오코딩 결과 주소.
+- 기존 접이식 탭은 **회피 강도 / 최단 경로 / 회피 경로 / 흡연 제보**로 분리.
+- 최단/회피 결과에 거리 및 예상 시간을 각각 표시하며, 기존 좌표 직접 입력 기능은 회피 강도/결과 탭 아래 '좌표 직접 입력'으로 유지.
+- B2C 청정지수 Canvas: 투명도 누적 방지를 위해 검정 바탕에서 최대 grayscale 합성 후 단일 색상 alpha로 적용. 지도 이동 시작 시 잠시 숨기고 이동 완료 후 재생성(잔상 완화).
+- 지도 선 끝·교차점은 round로 처리. **지도 출력의 부드러움은 브라우저·확대 수준에 따라 차이가 있어 수동 테스트가 필요**.
+
+## 주소 API 연결 (Kakao Local)
+
+카카오 Developers에서 앱을 등록하고 **REST API 키**를 발급받아 백엔드 환경변수로 설정합니다. 백엔드 시작 터미널의 PowerShell 예:
+
+```powershell
+$env:KAKAO_REST_API_KEY = "카카오_앱의_REST_API_키"
+cd app/backend
+python -m uvicorn main:app --reload
+```
+
+`app/backend/.env.example`은 참고 파일일 뿐 자동으로 환경변수를 설정하지 않습니다. API 키를 프론트엔드의 `VITE_*`나 GitHub에 넣으면 안 됩니다.
+
+카카오 좌표→주소 API는 `GET https://dapi.kakao.com/v2/local/geo/coord2address.json?x={경도}&y={위도}&input_coord=WGS84`입니다. 백엔드 `GET /api/reverse-address?lat=37.5&lng=127.02`가 이 API를 서버에서 호출하고 응답을 캐싱합니다. 키 미설정/검색 실패 시 지도 경로 계산을 중단하지 않고 **좌표와 주소 확인 불가 안내**로 대신 표시합니다.
+
+참고: https://developers.kakao.com/docs/latest/ko/local/dev-guide#coord-to-address
+
+## 흡연구역 지도 API 연결
+
+**이미 연결된 앱 API**는 `GET /api/smoking-zones`입니다. B2C/B2G 우상단 🚬 버튼이 이 URL을 조회합니다. 하지만 실제 위치를 반환하려면 검증된 데이터가 필요합니다.
+
+1. [서울시 실외흡연 시설 현황](https://data.seoul.go.kr/dataList/OA-22191/S/1/datasetView.do)에서 최근 원본 XLSX 또는 CSV를 받습니다.
+2. 시트의 시설명·설치위치를 확인합니다. 원본에는 위경도가 없고, 민간이 설치한 흡연시설은 포함하지 않으므로 **지도 마커로 곧바로 변환할 수 없습니다.**
+3. 설치 위치를 좌표로 지오코딩한 뒤 실제 시설 위치와 일치하는지 확인합니다. '역 주변', '빌딩 옆'처럼 넓은 표현은 자동 지오코딩의 중심점으로 사용하지 않고 검증하거나 제외합니다.
+4. 아래 형태로 검증한 위치를 CSV에 저장합니다.
+
+```csv
+name,lat,lng
+```
+
+5. 백엔드 실행 터미널에서 설정하고 재시작합니다.
+
+```powershell
+$env:LUNG_SMOKING_ZONES_CSV = "C:\\data\\verified_smoking_zones.csv"
+cd app/backend
+python -m uvicorn main:app --reload
+```
+
+6. 새 PowerShell에서 아래처럼 확인합니다.
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/smoking-zones |
+    Select-Object source, zones
+```
+
+`source: configured-csv`이고 `zones`에 실제 시설이 있을 때 지도에 표시합니다. 미설정이면 `not-configured`와 빈 목록을 반환합니다. **서울시 원본 자료를 온라인에서 직접 주기적으로 가져와서 좌표까지 자동 생성하는 서버는 아직 만들지 않았습니다.** '흡연구역'과 '금연구역'을 혼동하지 않도록 `nosmoking_zones_*.csv`를 이 API에 연결하지 마세요.
+
+원본 자료의 대상은 공공 실외시설이며 현재 운영 중인지와 흡연 가능 범위는 현장 안내가 우선합니다.
