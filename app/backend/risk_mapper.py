@@ -4,6 +4,8 @@ import osmnx as ox
 from pyproj import Transformer
 from shapely.geometry import Point
 
+from risk_decay import effective_risk, cleanliness_index
+
 
 # =====================================================
 # 1. 위험도와 보행 링크 매핑
@@ -67,6 +69,7 @@ def map_risks_to_edges(graph, risk_locations):
         risk_id = str(risk["id"])
         score = float(risk["score"])
         radius = float(risk["radiusM"])
+        is_model = risk.get("decayProfile") == "model-v1"
 
         # 위경도 -> 미터 좌표계
         x, y = transformer.transform(
@@ -96,11 +99,18 @@ def map_risks_to_edges(graph, risk_locations):
             if not line.intersects(risk_area):
                 continue
 
+            # 보행 링크와 모델 예측 노드 사이 최소거리로 위험 영향 감쇠
+            # 기존 Mock 위치는 이전처럼 전체 반경 내 원점수를 유지한다.
+            edge_score = effective_risk(score, center.distance(line)) if is_model else score
+            if edge_score <= 0:
+                continue
+
             # 최초 발견한 위험 링크
             if edge_id not in edge_risks:
                 edge_risks[edge_id] = {
-                    "score": score,
-                    "normalizedRisk": score / 100.0,
+                    "score": edge_score,
+                    "cleanIndex": cleanliness_index(edge_score),
+                    "normalizedRisk": edge_score / 100.0,
                     "riskIds": [risk_id],
                 }
 
@@ -111,8 +121,9 @@ def map_risks_to_edges(graph, risk_locations):
                 # 최대 위험점수 사용
                 existing["score"] = max(
                     existing["score"],
-                    score,
+                    edge_score,
                 )
+                existing["cleanIndex"] = cleanliness_index(existing["score"])
 
                 existing["normalizedRisk"] = (
                     existing["score"] / 100.0
@@ -180,6 +191,7 @@ def serialize_edge_risks(edge_risks, limit=100):
             "v": str(v),
             "key": str(key),
             "score": risk["score"],
+            "cleanIndex": risk.get("cleanIndex", 100.0 - risk["score"]),
             "normalizedRisk": risk["normalizedRisk"],
             "riskIds": risk["riskIds"],
         })
