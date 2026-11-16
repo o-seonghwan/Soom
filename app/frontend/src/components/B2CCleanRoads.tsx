@@ -25,6 +25,7 @@ export default function B2CCleanRoads({ edges }: Props) {
   useEffect(() => {
     const canvas = document.createElement("canvas");
     canvas.className = "leaflet-zoom-hide";
+    canvas.style.imageRendering = "auto";
     canvas.style.position = "absolute";
     canvas.style.pointerEvents = "none";
     const pane = map.getPanes().overlayPane;
@@ -33,6 +34,7 @@ export default function B2CCleanRoads({ edges }: Props) {
     // Reuse one offscreen canvas to paint into independent intensity pixels.
     const intensityCanvas = document.createElement("canvas");
     const uniqueEdges = deduplicateCleanEdges(edges);
+    let frame = 0;
 
     function render() {
       const size = map.getSize();
@@ -58,8 +60,13 @@ export default function B2CCleanRoads({ edges }: Props) {
 
       // Use 'lighten' on grayscale source: overlapping geometry retains
       // the maximum per-pixel opacity instead of alpha accumulating.
+      // Opaque black underlayer is required: lighten on transparent canvas
+      // would otherwise alpha-composite different links into a dark blob.
+      intensity.globalCompositeOperation = "source-over";
+      intensity.fillStyle = "#000";
+      intensity.fillRect(0, 0, width, height);
       intensity.globalCompositeOperation = "lighten";
-      intensity.lineWidth = Math.max(1, 3 * scale);
+      intensity.lineWidth = (map.getZoom() >= 17 ? 3.2 : 2.2) * scale;
       intensity.lineCap = "round";
       intensity.lineJoin = "round";
 
@@ -93,10 +100,23 @@ export default function B2CCleanRoads({ edges }: Props) {
       output.putImageData(pixels, 0, 0);
     }
 
-    map.on("moveend zoomend resize", render);
-    render();
+    // During map movement remove the stale overlay immediately to avoid
+    // duplicated/ghost roads. Redraw only at a stable map position.
+    const clear = () => { canvas.style.visibility = "hidden"; };
+    const schedule = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        render();
+        canvas.style.visibility = "visible";
+      });
+    };
+    map.on("movestart zoomstart", clear);
+    map.on("moveend zoomend resize", schedule);
+    schedule();
     return () => {
-      map.off("moveend zoomend resize", render);
+      window.cancelAnimationFrame(frame);
+      map.off("movestart zoomstart", clear);
+      map.off("moveend zoomend resize", schedule);
       canvas.remove();
     };
   }, [map, edges]);
