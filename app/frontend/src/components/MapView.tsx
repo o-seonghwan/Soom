@@ -264,26 +264,32 @@ export default function MapView({
           />
         )}
 
-        {/* B2G만: 실제 보행 링크별 청정지수 색상. B2C는 기존 위험 표시 유지. */}
-        {audience === "b2g" && showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
+        {/* AI 모델의 동일한 보행 링크 지수를 B2G/B2C 각각의 표현 규칙으로 표시 */}
+        {showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
           <GeoJSON
-            key={`clean-roads-${cleanlinessEdges.length}`}
+            key={`clean-roads-${audience}-${cleanlinessEdges.length}`}
             data={{ type: "FeatureCollection", features: cleanlinessEdges } as FeatureCollection}
-            style={(feature) => ({
-              color: getCleanColor(Number(feature?.properties?.cleanIndex ?? 100)),
-              weight: 5,
-              opacity: 0.9,
-            })}
+            style={(feature) => {
+              const raw = Number(feature?.properties?.cleanIndex);
+              const clean = Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : 100;
+              return {
+                // B2G는 기존 5단계 색상 유지 + 히트맵처럼 반투명.
+                // B2C는 연두색 고정, 낮은 청정지수일수록 투명도가 작아짐.
+                color: audience === "b2g" ? getCleanColor(clean) : "#84cc16",
+                weight: audience === "b2g" ? 5 : 6,
+                opacity: audience === "b2g" ? 0.36 : 0.18 + 0.67 * (1 - clean / 100),
+              };
+            }}
             onEachFeature={(feature, layer) => {
               const clean = Number(feature.properties?.cleanIndex ?? 100);
               const risk = Number(feature.properties?.score ?? 0);
-              layer.bindPopup(`보행 링크 청정지수: ${clean.toFixed(1)}/100<br/>유효 위험점수: ${risk.toFixed(1)}/100`);
+              layer.bindPopup(`보행 링크 청정지수: ${clean.toFixed(1)}/100<br/>유효 위험점수: ${risk.toFixed(1)}/100<br/>AI 모델 예측 기반 지표 (실측 대기질 아님)`);
             }}
           />
         )}
 
-        {/* 기존 위치별 간접흡연 위험도: B2C 전용 */}
-        {audience !== "b2g" && showRisks &&
+        {/* 구형 데이터 사용 화면에만 기존 위험 원형 유지. 모델 보행로와 중복 표시하지 않음. */}
+        {audience === "b2c" && !cleanlinessEdges && showRisks &&
           risks.map((risk) => (
             <Circle
               key={risk.id}
