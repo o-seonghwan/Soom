@@ -24,6 +24,7 @@ import { getCleanColor } from "../utils/cleanColor";
 import type { CleanEdgeFeature } from "../types/cleanliness";
 import B2CCleanRoads from "./B2CCleanRoads";
 import MapRouteCard from "./MapRouteCard";
+import { deduplicateCleanEdges } from "../utils/deduplicateCleanEdges";
 import "leaflet/dist/leaflet.css";
 
 // 강남구 지도 중심 (초기 임시 위치)
@@ -45,6 +46,10 @@ interface MapViewProps {
   reportLocation: Coordinate | null;
   focusPoint: Coordinate | null;
   selectionMode?: "start" | "end";
+  startAddress?: string | null;
+  endAddress?: string | null;
+  routeLoading?: boolean;
+  onSearch?: () => void;
   onSelectLocation?: (mode: "start" | "end") => void;
   onSwapLocations?: () => void;
   onLocate?: () => void;
@@ -202,6 +207,10 @@ export default function MapView({
   reportLocation,
   focusPoint,
   selectionMode = "start",
+  startAddress = null,
+  endAddress = null,
+  routeLoading = false,
+  onSearch,
   onSelectLocation,
   onSwapLocations,
   onLocate,
@@ -319,11 +328,14 @@ export default function MapView({
         {audience === "b2g" && showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
           <GeoJSON
             key={`clean-roads-b2g-${cleanlinessEdges.length}`}
-            data={{ type: "FeatureCollection", features: cleanlinessEdges } as FeatureCollection}
+            data={{ type: "FeatureCollection", features: deduplicateCleanEdges(cleanlinessEdges) } as FeatureCollection}
             style={(feature) => ({
               color: getCleanColor(Number(feature?.properties?.cleanIndex ?? 100)),
-              weight: 5,
+              weight: 3,
               opacity: 0.36,
+              lineCap: "round",
+              lineJoin: "round",
+              smoothFactor: 1,
             })}
             onEachFeature={(feature, layer) => {
               const clean = Number(feature.properties?.cleanIndex ?? 100);
@@ -403,10 +415,14 @@ export default function MapView({
             pathOptions={{
               color:
                 route.id === "shortest"
-                  ? "#D8DAD3"
-                  : "#A68A64",
+                  ? "#343A40"
+                  : "#72EFDD",
               weight: route.id === "shortest" ? 5 : 6,
-              opacity: 0.95,
+              opacity: 0.98,
+              lineCap: "round",
+              lineJoin: "round",
+              smoothFactor: 1,
+              noClip: true,
             }}
           >
             <Popup>
@@ -498,10 +514,11 @@ export default function MapView({
         )}
       </MapContainer>
 
-      {audience === "b2c" && onSelectLocation && onSwapLocations && (
-        <div className="pointer-events-none absolute left-3 top-3 z-[650] w-[min(350px,calc(100%-5.5rem))]">
+      {audience === "b2c" && onSelectLocation && onSwapLocations && onSearch && (
+        <div className="pointer-events-none absolute left-3 top-3 z-[650] w-[min(440px,calc(100%-5.5rem))]">
           <MapRouteCard start={start} end={end} selectionMode={selectionMode}
-            onSelect={onSelectLocation} onSwap={onSwapLocations} />
+            startAddress={startAddress} endAddress={endAddress} loading={routeLoading}
+            onSelect={onSelectLocation} onSwap={onSwapLocations} onSearch={onSearch} />
         </div>
       )}
 
