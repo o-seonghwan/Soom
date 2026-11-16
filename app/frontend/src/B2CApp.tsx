@@ -371,45 +371,48 @@ export default function App() {
   // 10. 현재 위치를 출발지로 설정
   // =======================================
 
-  function useCurrentLocation() {
-    if (searchInProgress.current) {
-      return;
-    }
-
+  function requestCurrentLocation(mode: "start" | "focus") {
+    if (searchInProgress.current) return;
     if (!navigator.geolocation) {
-      window.alert(
-        "현재 위치 기능을 지원하지 않습니다."
-      );
+      window.alert("현재 위치 기능을 지원하지 않습니다.");
       return;
     }
+    const purpose = mode === "start"
+      ? "현재 위치를 출발지에 입력하려면 위치 정보 사용에 동의해주세요. 동의한 경우에만 브라우저에 위치 권한을 요청합니다."
+      : "현재 위치로 지도를 이동하려면 위치 정보 사용에 동의해주세요. 위치를 경로 출발지로 저장하지 않습니다.";
+    if (!window.confirm(purpose)) return;
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (searchInProgress.current) {
-          return;
+      position => {
+        const point: Coordinate = [position.coords.latitude, position.coords.longitude];
+        if (mode === "start") {
+          updateLocation("start", point);
+          setSelectionMode("end");
+        } else {
+          setFocusPoint([...point]);
         }
-
-        const point: Coordinate = [
-          position.coords.latitude,
-          position.coords.longitude,
-        ];
-
-        updateLocation("start", point);
-        setSelectionMode("end");
       },
-      (error) => {
+      error => {
         console.error("위치 조회 오류:", error);
-
-        window.alert(
-          "현재 위치 확인에 실패했습니다."
-        );
+        window.alert("위치를 확인하지 못했습니다. 브라우저의 위치 접근 권한과 HTTPS 또는 localhost 실행 여부를 확인하세요.");
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
+  }
+
+  function useCurrentLocation() {
+    requestCurrentLocation("start");
+  }
+
+  function swapLocations() {
+    if (searchInProgress.current) return;
+    setStart(end);
+    setEnd(start);
+    setStartText(end ? formatCoordinate(end) : "");
+    setEndText(start ? formatCoordinate(start) : "");
+    setSelectionMode(start ? "end" : "start");
+    setFocusPoint(null);
+    clearSearchResult();
   }
 
 
@@ -588,6 +591,10 @@ export default function App() {
           showReports={showReports}
           reportLocation={reportLocation}
           focusPoint={focusPoint}
+          selectionMode={selectionMode}
+          onSelectLocation={setSelectionMode}
+          onSwapLocations={swapLocations}
+          onLocate={() => requestCurrentLocation("focus")}
           onMapClick={handleMapClick}
         />
 
