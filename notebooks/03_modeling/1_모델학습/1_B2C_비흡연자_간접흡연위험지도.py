@@ -94,7 +94,8 @@ def main():
     # 학습셋·시험셋 만들기
     print("<train_test_split으로 1km 공간 블록 나누기>")
     print("######################################################################")
-    blocks = data["블록"].unique()
+    # pandas 3 + pyarrow 환경에서는 unique()가 Arrow 배열이라 sklearn 분할이 실패한다 → numpy 배열로 바꾼다
+    blocks = np.asarray(data["블록"].unique(), dtype=object)
     if len(blocks) < 2:
         raise ValueError("학습과 시험에 서로 다른 공간 블록이 필요합니다.")
     train_blocks, test_blocks = train_test_split(blocks, test_size=0.2, random_state=SEED)
