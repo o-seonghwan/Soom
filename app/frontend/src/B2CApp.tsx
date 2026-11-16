@@ -91,6 +91,8 @@ export default function App() {
   const [pageMode, setPageMode] =
     useState<PageMode>("route");
 
+  const [showControls, setShowControls] = useState(false);
+
   const [selectionMode, setSelectionMode] =
     useState<LocationMode>("start");
 
@@ -446,6 +448,7 @@ export default function App() {
 
       setRoutes(result.routes);
       setSearchStatus("success");
+      setShowControls(false);
     } catch (error) {
       console.error("경로 탐색 오류:", error);
 
@@ -578,7 +581,7 @@ export default function App() {
         </p>
       </header>
 
-      {/* 지도 */}
+      {/* 전체 높이 지도 + 접을 수 있는 설정 패널 */}
       <main className="relative min-h-0 flex-1">
         <MapView
           start={start}
@@ -609,10 +612,15 @@ export default function App() {
               <p className="mt-2 text-[10px] text-gray-500">15레벨 이상 확대 시 표시 · 모델 예측 기반 · 실측 대기질 아님</p>
             </div>
           )}
-      </main>
+        <button type="button" onClick={() => setShowControls(value => !value)}
+          aria-expanded={showControls}
+          className="absolute left-3 top-36 z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
+          {showControls ? "설정 닫기 ×" : "경로 설정 · 제보 ☰"}
+        </button>
 
-      {/* 하단 패널 */}
-      <section className="z-[1000] max-h-[55dvh] overflow-y-auto bg-white p-4 shadow-lg">
+      {/* 경로 설정과 제보 폼은 필요할 때만 열어서 지도를 가리지 않도록 함 */}
+      {showControls && (
+      <section className="absolute left-3 top-48 z-[700] max-h-[min(56dvh,calc(100%-210px))] w-[min(390px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
 
         {/* 탭 전환 */}
         <div className="mb-4 grid grid-cols-2 gap-2">
@@ -751,6 +759,8 @@ export default function App() {
           반영되지 않습니다.
         </p>
       </section>
+      )}
+      </main>
     </div>
   );
 }
