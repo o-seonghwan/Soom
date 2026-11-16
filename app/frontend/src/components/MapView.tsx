@@ -22,7 +22,7 @@ import type { Report } from "../types/report";
 
 import { getCleanColor } from "../utils/cleanColor";
 import type { CleanEdgeFeature } from "../types/cleanliness";
-import { deduplicateCleanEdges } from "../utils/deduplicateCleanEdges";
+import B2CCleanRoads from "./B2CCleanRoads";
 import "leaflet/dist/leaflet.css";
 
 // 강남구 지도 중심 (초기 임시 위치)
@@ -265,33 +265,27 @@ export default function MapView({
           />
         )}
 
-        {/* AI 모델의 동일한 보행 링크 지수를 B2G/B2C 각각의 표현 규칙으로 표시 */}
-        {showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
+        {/* B2G: 기존 반투명 다색 보행로 유지 */}
+        {audience === "b2g" && showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
           <GeoJSON
-            key={`clean-roads-${audience}-${cleanlinessEdges.length}`}
-            data={{
-              type: "FeatureCollection",
-              features: audience === "b2c"
-                ? deduplicateCleanEdges(cleanlinessEdges)
-                : cleanlinessEdges,
-            } as FeatureCollection}
-            style={(feature) => {
-              const raw = Number(feature?.properties?.cleanIndex);
-              const clean = Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : 100;
-              return {
-                // B2G는 기존 5단계 색상 유지 + 히트맵처럼 반투명.
-                // B2C는 연두색 고정, 청정지수가 낮을수록 더 투명하게 표시.
-                color: audience === "b2g" ? getCleanColor(clean) : "#84cc16",
-                weight: audience === "b2g" ? 5 : 6,
-                opacity: audience === "b2g" ? 0.36 : 0.18 + 0.67 * (clean / 100),
-              };
-            }}
+            key={`clean-roads-b2g-${cleanlinessEdges.length}`}
+            data={{ type: "FeatureCollection", features: cleanlinessEdges } as FeatureCollection}
+            style={(feature) => ({
+              color: getCleanColor(Number(feature?.properties?.cleanIndex ?? 100)),
+              weight: 5,
+              opacity: 0.36,
+            })}
             onEachFeature={(feature, layer) => {
               const clean = Number(feature.properties?.cleanIndex ?? 100);
               const risk = Number(feature.properties?.score ?? 0);
-              layer.bindPopup(`보행 링크 청정지수: ${clean.toFixed(1)}/100<br/>유효 위험점수: ${risk.toFixed(1)}/100<br/>AI 모델 예측 기반 지표 (실측 대기질 아님)`);
+              layer.bindPopup(`보행 링크 청정지수: ${clean.toFixed(1)}/100<br/>유효 위험점수: ${risk.toFixed(1)}/100`);
             }}
           />
+        )}
+
+        {/* B2C: 초록색 단일 Canvas, 픽셀별 최대 불투명도만 적용 */}
+        {audience === "b2c" && showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
+          <B2CCleanRoads edges={cleanlinessEdges} />
         )}
 
         {/* 구형 데이터 사용 화면에만 기존 위험 원형 유지. 모델 보행로와 중복 표시하지 않음. */}
