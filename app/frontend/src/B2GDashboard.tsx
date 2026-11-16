@@ -27,7 +27,7 @@ export default function B2GDashboard() {
     useState<RiskLocation[]>([]);
 
   const [cleanEdges, setCleanEdges] = useState<CleanEdgeFeature[]>([]);
-  const [dataSource, setDataSource] = useState<"model-csv" | "mock" | null>(null);
+  const [dataSource, setDataSource] = useState<"model-csv" | null>(null);
 
   // 지도 표시 옵션
   const [showReports, setShowReports] =
@@ -87,21 +87,23 @@ export default function B2GDashboard() {
           );
         }
 
-        if (results[1].status === "fulfilled") {
+        // B2G 모델 지수/위험 지점은 모두 실제 AI 결과일 때만 표시한다.
+        if (results[2].status === "fulfilled" &&
+            results[1].status === "fulfilled") {
+          setCleanEdges(results[2].value.features);
+          setDataSource("model-csv");
           setRisks(results[1].value);
         } else {
-          console.error(results[1].reason);
-          setError(
-            "위험도 데이터를 불러오지 못했습니다."
-          );
-        }
-
-        if (results[2].status === "fulfilled") {
-          setCleanEdges(results[2].value.features);
-          setDataSource(results[2].value.source);
-        } else {
-          console.error(results[2].reason);
-          setError("보행로 청정지수 데이터를 불러오지 못했습니다.");
+          if (results[2].status === "rejected") {
+            console.error(results[2].reason);
+          }
+          if (results[1].status === "rejected") {
+            console.error(results[1].reason);
+          }
+          setCleanEdges([]);
+          setRisks([]);
+          setDataSource(null);
+          setError("AI 모델 결과를 불러오지 못했습니다. 백엔드의 LUNG_RISK_CSV 설정과 모델 CSV를 확인하세요.");
         }
       } finally {
         if (!cancelled) {
@@ -168,7 +170,7 @@ export default function B2GDashboard() {
 
         {showRisks && cleanEdges.length > 0 && (
           <div className="absolute bottom-14 left-3 z-[500] rounded-xl bg-white/95 p-3 shadow-lg">
-            <h3 className="text-sm font-bold">보행로 청정지수 · {dataSource === "model-csv" ? "AI 모델" : "Mock 예시"}</h3>
+            <h3 className="text-sm font-bold">보행로 청정지수 · AI 모델</h3>
             <div className="mt-2 flex gap-2 text-xs">
               {[{n: 10,t: "0–19"}, {n: 30,t: "20–39"}, {n: 50,t: "40–59"}, {n: 70,t: "60–79"}, {n: 90,t: "80–100"}].map(({n,t}) => (
                 <div key={n} className="flex flex-col items-center gap-1">
@@ -255,7 +257,7 @@ export default function B2GDashboard() {
             </p>
 
             <p className="mt-1 text-xs text-gray-500">
-              {dataSource === "model-csv" ? "실제 모델 위험점수 기반" : "Mock 예시 데이터"}
+              {dataSource === "model-csv" ? "실제 모델 위험점수 기반" : "AI 모델 연결 안 됨"}
             </p>
           </div>
         </div>
