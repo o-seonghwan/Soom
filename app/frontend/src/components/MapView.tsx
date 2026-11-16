@@ -274,10 +274,10 @@ export default function MapView({
               const clean = Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : 100;
               return {
                 // B2G는 기존 5단계 색상 유지 + 히트맵처럼 반투명.
-                // B2C는 연두색 고정, 낮은 청정지수일수록 투명도가 작아짐.
+                // B2C는 연두색 고정, 청정지수가 낮을수록 더 투명하게 표시.
                 color: audience === "b2g" ? getCleanColor(clean) : "#84cc16",
                 weight: audience === "b2g" ? 5 : 6,
-                opacity: audience === "b2g" ? 0.36 : 0.18 + 0.67 * (1 - clean / 100),
+                opacity: audience === "b2g" ? 0.36 : 0.18 + 0.67 * (clean / 100),
               };
             }}
             onEachFeature={(feature, layer) => {
