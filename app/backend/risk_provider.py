@@ -112,3 +112,17 @@ def get_risk_snapshot():
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "locations": locations,
     }
+
+
+
+def verify_model_edge_coverage(snapshot, edge_risks):
+    """Do not silently serve a model route if its points miss the walking graph.
+
+    A valid model CSV can still be spatially disjoint from the OSM network
+    (wrong city, coordinate order, incompatible graph extent).
+    """
+    if snapshot["source"] == "model-csv" and not edge_risks:
+        raise ValueError(
+            "모델 위험 지점이 현재 보행 네트워크의 링크와 하나도 겹치지 않습니다. "
+            "모델 좌표계·지역·보행망 범위를 확인하세요."
+        )
