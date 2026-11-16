@@ -211,9 +211,6 @@ export default function MapView({
   const [boundary, setBoundary] =
     useState<GeoJsonObject | null>(null);
 
-  const [boundaryError, setBoundaryError] =
-    useState(false);
-
   const [showSmokingZones, setShowSmokingZones] = useState(false);
   const [smokingZones, setSmokingZones] = useState<Array<{id:string;name:string;lat:number;lng:number}>>([]);
   const [smokingZonesMessage, setSmokingZonesMessage] = useState("");
@@ -263,13 +260,11 @@ export default function MapView({
 
         if (!cancelled) {
           setBoundary(data);
-          setBoundaryError(false);
         }
       } catch (error) {
         console.error(error);
 
         if (!cancelled) {
-          setBoundaryError(true);
         }
       }
     }
