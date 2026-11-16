@@ -476,7 +476,8 @@ export default function App() {
 
       setRoutes(result.routes);
       setSearchStatus("success");
-      setShowControls(true);
+      // Collapse overlays so both complete route lines remain visible.
+      setShowControls(false);
       setPageMode("shortest");
     } catch (error) {
       console.error("경로 탐색 오류:", error);
@@ -650,7 +651,7 @@ export default function App() {
         <button type="button" onClick={() => setShowControls(value => !value)}
           aria-expanded={showControls}
           className="absolute left-3 top-36 z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
-          {showControls ? "설정 닫기 ×" : "경로 설정 · 제보 ☰"}
+          {showControls ? "설정 닫기 ×" : routes.length > 0 ? "경로 결과 · 회피 강도 ☰" : "회피 강도 · 제보 ☰"}
         </button>
 
       {/* 경로 설정과 제보 폼은 필요할 때만 열어서 지도를 가리지 않도록 함 */}
