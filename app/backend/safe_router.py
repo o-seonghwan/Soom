@@ -5,6 +5,8 @@ import networkx as nx
 from pyproj import Transformer
 from shapely.geometry import Point
 
+from risk_decay import effective_risk
+
 from walking_router import (
     START_NODE,
     END_NODE,
@@ -60,7 +62,9 @@ def build_risk_areas(graph, risk_locations):
 
         areas.append({
             "geometry": area,
+            "center": Point(x, y),
             "score": float(risk["score"]),
+            "isModel": risk.get("decayProfile") == "model-v1",
         })
 
     return areas
@@ -104,10 +108,11 @@ def virtual_edge_risks(
 
         for risk in risk_areas:
             if line.intersects(risk["geometry"]):
-                score = max(
-                    score,
-                    risk["score"],
+                contribution = (
+                    effective_risk(risk["score"], line.distance(risk["center"]))
+                    if risk["isModel"] else risk["score"]
                 )
+                score = max(score, contribution)
 
         result[(u, v, key)] = score / 100.0
 
@@ -348,7 +353,7 @@ def calculate_safest_route(
 
     return {
         "id": "safest",
-        "name": "간접흡연 위험 회피 경로 (Mock)",
+        "name": "간접흡연 위험 회피 경로",
         "distanceM": round(total_distance),
         "estimatedMinutes": round(
             estimated_minutes, 1
