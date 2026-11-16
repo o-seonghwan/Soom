@@ -23,7 +23,7 @@ from walking_router import (
 )
 
 from safe_router import calculate_safest_route
-from risk_provider import get_risk_snapshot
+from risk_provider import get_risk_snapshot, verify_model_edge_coverage
 
 from risk_mapper import (
     map_risks_to_edges,
@@ -63,6 +63,9 @@ async def lifespan(app: FastAPI):
         graph=graph,
         risk_locations=snapshot["locations"],
     )
+
+    # 모델 CSV가 현재 OSM 보행망에 실제로 연결되었는지 시작 시 검증합니다.
+    verify_model_edge_coverage(snapshot, edge_risks)
 
     app.state.walking_graph = graph
     app.state.risk_snapshot = snapshot
