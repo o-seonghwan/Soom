@@ -70,7 +70,13 @@ def use_preprocessed_data():
             processed / "EDA결과",
             REPO_ROOT.parent / "data" / "processed_data",
         ]
-        EDA_ROOT = next((p for p in candidates if p.is_dir()), candidates[0])
+        EDA_ROOT = next(
+            (p for p in candidates if p.is_dir() and any(
+                q.parent.name.lower().startswith(("local_resd_250m", "250_local_resd_"))
+                for q in p.rglob("features.csv")
+            )),
+            next((p for p in candidates if p.is_dir()), candidates[0]),
+        )
     if not EDA_ROOT.is_dir():
         raise FileNotFoundError(f"전처리 결과 폴더를 찾을 수 없습니다. LUNG_EDA_ROOT를 확인하세요: {EDA_ROOT}")
     OUT_DIR = str(EDA_OUT_DIR)
