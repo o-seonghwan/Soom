@@ -1,5 +1,10 @@
 
 from datetime import datetime, timezone
+import math
+import os
+
+from model_risk_adapter import load_model_risks
+from risk_decay import cleanliness_index
 
 
 # =====================================================
@@ -50,20 +55,20 @@ def validate_risk(risk):
     lat = float(risk["lat"])
     lng = float(risk["lng"])
 
-    if not 0 <= score <= 100:
+    if not math.isfinite(score) or not 0 <= score <= 100:
         raise ValueError(
             "위험점수는 0~100 사이여야 합니다."
         )
 
-    if radius <= 0:
+    if not math.isfinite(radius) or radius <= 0:
         raise ValueError(
             "위험 반경은 0보다 커야 합니다."
         )
 
-    if not (-90 <= lat <= 90):
+    if not math.isfinite(lat) or not (-90 <= lat <= 90):
         raise ValueError("위도 범위가 잘못되었습니다.")
 
-    if not (-180 <= lng <= 180):
+    if not math.isfinite(lng) or not (-180 <= lng <= 180):
         raise ValueError("경도 범위가 잘못되었습니다.")
 
     return {
@@ -72,6 +77,8 @@ def validate_risk(risk):
         "lng": lng,
         "score": score,
         "radiusM": radius,
+        "cleanIndex": cleanliness_index(score),
+        **({"decayProfile": risk["decayProfile"]} if "decayProfile" in risk else {}),
     }
 
 
@@ -87,14 +94,19 @@ def get_risk_snapshot():
     추후: AI 모델 예측 결과 또는 DB 조회
     """
 
-    locations = [
-        validate_risk(risk)
-        for risk in MOCK_RISKS
-    ]
+    csv_path = os.environ.get("LUNG_RISK_CSV", "").strip()
+    if csv_path:
+        locations = [validate_risk(r) for r in load_model_risks(csv_path)]
+        source = "model-csv"
+        version = "model-distance-bands-v1"
+    else:
+        locations = [validate_risk(r) for r in MOCK_RISKS]
+        source = "mock"
+        version = "mock-v1"
 
     return {
-        "source": "mock",
-        "version": "mock-v1",
+        "source": source,
+        "version": version,
         "generatedAt": datetime.now(
             timezone.utc
         ).isoformat(),
