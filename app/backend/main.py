@@ -26,6 +26,8 @@ from safe_router import calculate_safest_route
 from b2g_cleanliness import edge_cleanliness_geojson
 from risk_provider import get_risk_snapshot
 from smoking_zones import load_smoking_zones
+from address_lookup import reverse_address
+import requests
 
 from risk_mapper import (
     map_risks_to_edges,
@@ -286,6 +288,17 @@ def compare_routes(
 
     except Exception as error:
         handle_route_error(error)
+
+
+@app.get("/api/reverse-address")
+def reverse_address_api(lat: float, lng: float):
+    """Server-side reverse-geocoding. Coordinates only, never send an API key to the browser."""
+    try:
+        return reverse_address(lat, lng)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except requests.RequestException as error:
+        raise HTTPException(status_code=503, detail="주소 조회 서비스 연결에 실패했습니다.") from error
 
 
 @app.get("/api/smoking-zones")
