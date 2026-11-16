@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import MapView from "./components/MapView";
 import ReportForm from "./components/ReportForm";
 import RoutePanel from "./components/RoutePanel";
+import RouteResultPanel from "./components/RouteResultPanel";
+import { lookupAddress } from "./services/addressService";
 
 import type {
   Coordinate,
@@ -27,7 +29,7 @@ import {
 } from "./services/reportService";
 
 
-type PageMode = "route" | "report";
+type PageMode = "route" | "shortest" | "safest" | "report";
 type LocationMode = "start" | "end";
 type SearchStatus = "idle" | "success" | "error";
 
@@ -111,6 +113,28 @@ export default function App() {
 
   const [startText, setStartText] = useState("");
   const [endText, setEndText] = useState("");
+  const [startAddress, setStartAddress] = useState<string | null>(null);
+  const [endAddress, setEndAddress] = useState<string | null>(null);
+  const [showCoordinates, setShowCoordinates] = useState(false);
+
+  // Geocoding is for display only; route coordinates remain unchanged.
+  useEffect(() => {
+    if (!start) { setStartAddress(null); return; }
+    const controller = new AbortController();
+    void lookupAddress(start, controller.signal)
+      .then(setStartAddress)
+      .catch(error => { if (!controller.signal.aborted) { console.warn("출발지 주소 조회:", error); setStartAddress(null); } });
+    return () => controller.abort();
+  }, [start?.[0], start?.[1]]);
+
+  useEffect(() => {
+    if (!end) { setEndAddress(null); return; }
+    const controller = new AbortController();
+    void lookupAddress(end, controller.signal)
+      .then(setEndAddress)
+      .catch(error => { if (!controller.signal.aborted) { console.warn("목적지 주소 조회:", error); setEndAddress(null); } });
+    return () => controller.abort();
+  }, [end?.[0], end?.[1]]);
 
   const [avoidanceLevel, setAvoidanceLevel] =
     useState<RouteRequest["avoidanceLevel"]>("medium");
@@ -448,7 +472,8 @@ export default function App() {
 
       setRoutes(result.routes);
       setSearchStatus("success");
-      setShowControls(false);
+      setShowControls(true);
+      setPageMode("shortest");
     } catch (error) {
       console.error("경로 탐색 오류:", error);
 
@@ -595,6 +620,10 @@ export default function App() {
           reportLocation={reportLocation}
           focusPoint={focusPoint}
           selectionMode={selectionMode}
+          startAddress={startAddress}
+          endAddress={endAddress}
+          routeLoading={loading}
+          onSearch={() => void handleSearch()}
           onSelectLocation={setSelectionMode}
           onSwapLocations={swapLocations}
           onLocate={() => requestCurrentLocation("focus")}
@@ -622,59 +651,64 @@ export default function App() {
       {showControls && (
       <section className="absolute left-3 top-48 z-[700] max-h-[min(56dvh,calc(100%-210px))] w-[min(390px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
 
-        {/* 탭 전환 */}
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => changePage("route")}
-            className={`rounded-lg p-3 text-sm font-bold ${
-              pageMode === "route"
-                ? "bg-green-600 text-white"
-                : "bg-gray-100 text-gray-700"
-            }`}
-          >
-            경로 탐색
-          </button>
-
-          <button
-            type="button"
-            onClick={() => changePage("report")}
-            className={`rounded-lg p-3 text-sm font-bold ${
-              pageMode === "report"
-                ? "bg-purple-600 text-white"
-                : "bg-gray-100 text-gray-700"
-            }`}
-          >
-            흡연 제보
-          </button>
-
+        {/* 회피 강도/결과를 별도 탭으로 구분 */}
+        <div className="mb-4 grid grid-cols-4 gap-1">
+          {([
+            ["route", "회피 강도"],
+            ["shortest", "최단 경로"],
+            ["safest", "회피 경로"],
+            ["report", "흡연 제보"],
+          ] as const).map(([mode, label]) => (
+            <button key={mode} type="button" onClick={() => changePage(mode)}
+              className={`rounded-lg p-2 text-xs font-bold ${pageMode === mode ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-700"}`}>
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* 경로 탐색 탭 */}
         {pageMode === "route" && (
-          <RoutePanel
-            start={start}
-            end={end}
-            startText={startText}
-            endText={endText}
-            selectionMode={selectionMode}
-            avoidanceLevel={avoidanceLevel}
-            routes={routes}
-            loading={loading}
-            elapsedSeconds={elapsedSeconds}
-            searchStatus={searchStatus}
-            onStartTextChange={setStartText}
-            onEndTextChange={setEndText}
-            onApplyCoordinate={applyCoordinate}
-            onSelectLocation={setSelectionMode}
-            onUseCurrentLocation={useCurrentLocation}
-            onAvoidanceLevelChange={(value) => {
-              setAvoidanceLevel(value);
-              clearSearchResult();
-            }}
-            onSearch={() => void handleSearch()}
-            onReset={resetRoute}
-          />
+          <RoutePanel avoidanceLevel={avoidanceLevel} loading={loading}
+            onAvoidanceLevelChange={value => { setAvoidanceLevel(value); clearSearchResult(); }} />
+        )}
+
+        {pageMode === "shortest" && (
+          <RouteResultPanel type="shortest" route={routes.find(route => route.id === "shortest")} />
+        )}
+
+        {pageMode === "safest" && (
+          <RouteResultPanel type="safest" route={routes.find(route => route.id !== "shortest")} />
+        )}
+
+        {loading && <p role="status" className="mt-3 text-xs text-slate-600">경로 계산 중... {elapsedSeconds.toFixed(1)}초</p>}
+        {!loading && searchStatus === "error" && <p role="alert" className="mt-3 text-xs text-red-600">경로 탐색에 실패했습니다.</p>}
+
+        {/* 기존 수동 좌표 입력은 별도 접이식 도구로 보존 */}
+        {pageMode !== "report" && (
+          <div className="mt-3 border-t pt-3">
+            <button type="button" onClick={() => setShowCoordinates(value => !value)}
+              className="text-xs font-semibold text-slate-600">
+              {showCoordinates ? "좌표 직접 입력 닫기 ▲" : "좌표 직접 입력 ▼"}
+            </button>
+            {showCoordinates && (
+              <div className="mt-2 space-y-2">
+                {(["start", "end"] as const).map(mode => (
+                  <div key={mode} className="flex items-center gap-2">
+                    <input aria-label={mode === "start" ? "출발지 좌표" : "목적지 좌표"}
+                      placeholder={mode === "start" ? "출발지 위도, 경도" : "목적지 위도, 경도"}
+                      value={mode === "start" ? startText : endText}
+                      onChange={event => mode === "start" ? setStartText(event.target.value) : setEndText(event.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border p-2 text-xs" />
+                    <button type="button" onClick={() => applyCoordinate(mode)}
+                      className="rounded-lg bg-slate-100 px-3 py-2 text-xs">적용</button>
+                  </div>
+                ))}
+                <button type="button" onClick={useCurrentLocation} className="rounded-lg border px-3 py-2 text-xs">
+                  동의 후 현재 위치를 출발지로 지정
+                </button>
+                <button type="button" onClick={resetRoute} className="ml-2 rounded-lg border px-3 py-2 text-xs">경로 초기화</button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* 흡연 제보 탭 */}
