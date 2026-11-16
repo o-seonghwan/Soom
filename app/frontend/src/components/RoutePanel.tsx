@@ -193,10 +193,18 @@ export default function RoutePanel({
           <option value="high">높음</option>
         </select>
 
-        <p className="text-xs text-gray-500">
-          회피 강도는 위험 회피 경로에만 적용됩니다.
-          일반 최단경로는 보행 거리만 고려합니다.
-        </p>
+        <div className="rounded-lg bg-emerald-50 p-3 text-xs leading-5 text-slate-700">
+          {avoidanceLevel === "low" && (
+            <p><strong>낮음 · 가까운 길 우선</strong> — 불필요한 우회를 줄이면서, 비슷한 거리라면 모델 위험점수가 낮은 길을 선택합니다.</p>
+          )}
+          {avoidanceLevel === "medium" && (
+            <p><strong>보통 · 거리와 회피의 균형</strong> — 조금 더 걸어도 상대적으로 위험점수가 낮은 길을 선택할 수 있습니다.</p>
+          )}
+          {avoidanceLevel === "high" && (
+            <p><strong>높음 · 회피 우선</strong> — 우회 거리가 늘어나더라도 상대적으로 위험점수가 낮은 길을 더 적극적으로 선택합니다.</p>
+          )}
+          <p className="mt-1 text-slate-500">이는 예상 경로 선택 성향입니다. 실제 담배 냄새·연기 노출 정도나 회피 효과를 보장하지 않습니다. 일반 최단경로는 거리만 고려합니다.</p>
+        </div>
       </div>
 
       {/* 탐색 버튼 */}
