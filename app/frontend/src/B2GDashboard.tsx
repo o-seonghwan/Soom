@@ -3,7 +3,9 @@ import { useCallback, useEffect, useState } from "react";
 
 import MapView from "./components/MapView";
 import AdminDashboard from "./components/AdminDashboard";
-import RiskLegend from "./components/RiskLegend";
+import { getB2GCleanEdges } from "./services/cleanlinessService";
+import type { CleanEdgeFeature } from "./types/cleanliness";
+import { getCleanColor } from "./utils/cleanColor";
 
 import { getReports } from "./services/reportService";
 import { getRisks } from "./services/riskService";
@@ -23,6 +25,9 @@ export default function B2GDashboard() {
   // 위험지역
   const [risks, setRisks] =
     useState<RiskLocation[]>([]);
+
+  const [cleanEdges, setCleanEdges] = useState<CleanEdgeFeature[]>([]);
+  const [dataSource, setDataSource] = useState<"model-csv" | "mock" | null>(null);
 
   // 지도 표시 옵션
   const [showReports, setShowReports] =
@@ -68,6 +73,7 @@ export default function B2GDashboard() {
         const results = await Promise.allSettled([
           getReports(),
           getRisks(),
+          getB2GCleanEdges(),
         ]);
 
         if (cancelled) return;
@@ -88,6 +94,14 @@ export default function B2GDashboard() {
           setError(
             "위험도 데이터를 불러오지 못했습니다."
           );
+        }
+
+        if (results[2].status === "fulfilled") {
+          setCleanEdges(results[2].value.features);
+          setDataSource(results[2].value.source);
+        } else {
+          console.error(results[2].reason);
+          setError("보행로 청정지수 데이터를 불러오지 못했습니다.");
         }
       } finally {
         if (!cancelled) {
@@ -140,6 +154,7 @@ export default function B2GDashboard() {
           end={null}
           routes={[]}
           risks={risks}
+          cleanlinessEdges={cleanEdges}
           reports={visibleReports}
           showRisks={showRisks}
           showReports={showReports}
@@ -151,8 +166,19 @@ export default function B2GDashboard() {
           }}
         />
 
-        {showRisks && risks.length > 0 && (
-          <RiskLegend />
+        {showRisks && cleanEdges.length > 0 && (
+          <div className="absolute bottom-14 left-3 z-[500] rounded-xl bg-white/95 p-3 shadow-lg">
+            <h3 className="text-sm font-bold">보행로 청정지수 · {dataSource === "model-csv" ? "AI 모델" : "Mock 예시"}</h3>
+            <div className="mt-2 flex gap-2 text-xs">
+              {[{n: 10,t: "0–19"}, {n: 30,t: "20–39"}, {n: 50,t: "40–59"}, {n: 70,t: "60–79"}, {n: 90,t: "80–100"}].map(({n,t}) => (
+                <div key={n} className="flex flex-col items-center gap-1">
+                  <span className="h-3 w-8 rounded" style={{background: getCleanColor(n)}}/>
+                  <span>{t}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 max-w-72 text-[10px] text-gray-600">높을수록 상대적으로 청정 · 비표시 구간은 데이터 없음 · 실측 대기질이 아님</p>
+          </div>
         )}
       </main>
 
@@ -191,7 +217,7 @@ export default function B2GDashboard() {
               }
               className="h-4 w-4 accent-slate-600"
             />
-            위험지역 표시
+            보행로 청정지수 표시
           </label>
         </div>
 
@@ -229,7 +255,7 @@ export default function B2GDashboard() {
             </p>
 
             <p className="mt-1 text-xs text-gray-500">
-              현재 Mock 위험 데이터
+              {dataSource === "model-csv" ? "실제 모델 위험점수 기반" : "Mock 예시 데이터"}
             </p>
           </div>
         </div>
@@ -289,7 +315,7 @@ export default function B2GDashboard() {
           관리자 로그인 전에는 승인된 공개 신고만
           지도에 표시됩니다. 로그인 후에는
           관리자 권한으로 조회한 신고 전체를
-          표시합니다. 현재 위험 데이터는 Mock이며
+          표시합니다. 청정지수는 위험점수 기반 파생값이며
           DBSCAN 분석은 아직 연결되지 않았습니다.
         </p>
       </section>
