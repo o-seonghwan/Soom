@@ -335,7 +335,6 @@ export default function MapView({
               opacity: 0.36,
               lineCap: "round",
               lineJoin: "round",
-              smoothFactor: 1,
             })}
             onEachFeature={(feature, layer) => {
               const clean = Number(feature.properties?.cleanIndex ?? 100);
@@ -421,8 +420,6 @@ export default function MapView({
               opacity: 0.98,
               lineCap: "round",
               lineJoin: "round",
-              smoothFactor: 1,
-              noClip: true,
             }}
           >
             <Popup>
