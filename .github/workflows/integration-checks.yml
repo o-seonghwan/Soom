@@ -39,5 +39,11 @@ jobs:
           for path in Path("notebooks").rglob("*.ipynb"):
               notebook = json.loads(path.read_text(encoding="utf-8"))
               assert notebook.get("cells") is not None, str(path)
-          print("Notebook JSON validation passed")
+          import ast
+          for path in Path("notebooks/01_eda").glob("EDA_LOCAL_RESD_250M_*.ipynb"):
+              notebook = json.loads(path.read_text(encoding="utf-8"))
+              for index, cell in enumerate(notebook["cells"]):
+                  if cell["cell_type"] == "code":
+                      ast.parse("".join(cell["source"]), filename=f"{path}:cell{index}")
+          print("Notebook JSON and population notebook Python syntax validation passed")
           PY
