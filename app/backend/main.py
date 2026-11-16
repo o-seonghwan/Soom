@@ -23,6 +23,7 @@ from walking_router import (
 )
 
 from safe_router import calculate_safest_route
+from b2g_cleanliness import edge_cleanliness_geojson
 from risk_provider import get_risk_snapshot
 
 from risk_mapper import (
@@ -73,6 +74,7 @@ async def lifespan(app: FastAPI):
     app.state.walking_graph = graph
     app.state.risk_snapshot = snapshot
     app.state.edge_risks = edge_risks
+    app.state.b2g_cleanliness = edge_cleanliness_geojson(graph, edge_risks)
 
     summary = summarize_edge_risks(
         graph=graph,
@@ -94,6 +96,7 @@ async def lifespan(app: FastAPI):
     app.state.walking_graph = None
     app.state.risk_snapshot = None
     app.state.edge_risks = None
+    app.state.b2g_cleanliness = None
 
 
 # =========================================
@@ -287,6 +290,27 @@ def compare_routes(
 @app.get("/api/risks")
 def get_risks(request: Request):
     return request.app.state.risk_snapshot["locations"]
+
+
+@app.get("/api/b2g/cleanliness/edges")
+def get_b2g_cleanliness_edges(request: Request):
+    """B2G visualization must use actual model results, never Mock scores."""
+    snapshot = request.app.state.risk_snapshot
+    if snapshot["source"] != "model-csv":
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "B2G 청정지수는 AI 모델 결과만 표시합니다. "
+                "LUNG_RISK_CSV에 1_위험지도_지점.csv의 전체 경로를 지정하고 "
+                "백엔드를 재시작하세요."
+            ),
+        )
+    return {
+        **request.app.state.b2g_cleanliness,
+        "source": "model-csv",
+        "modelPointCount": len(snapshot["locations"]),
+        "modelVersion": snapshot["version"],
+    }
 
 
 @app.get("/api/risks/edges")

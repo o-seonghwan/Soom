@@ -15,12 +15,14 @@ import {
   useMapEvents,
 } from "react-leaflet";
 
-import type { Feature, GeoJsonObject, Polygon } from "geojson";
+import type { Feature, FeatureCollection, GeoJsonObject, Polygon } from "geojson";
 import type { Coordinate, Route } from "../types/route";
 import type { RiskLocation } from "../types/risk";
 import type { Report } from "../types/report";
 
-import { getRiskColor } from "../utils/riskColor";
+import { getCleanColor } from "../utils/cleanColor";
+import type { CleanEdgeFeature } from "../types/cleanliness";
+import B2CCleanRoads from "./B2CCleanRoads";
 import "leaflet/dist/leaflet.css";
 
 // 강남구 지도 중심 (초기 임시 위치)
@@ -35,6 +37,7 @@ interface MapViewProps {
   end: Coordinate | null;
   routes: Route[];
   risks: RiskLocation[];
+  cleanlinessEdges?: CleanEdgeFeature[];
   reports: Report[];
   showRisks: boolean;
   showReports: boolean;
@@ -167,6 +170,7 @@ export default function MapView({
   end,
   routes,
   risks,
+  cleanlinessEdges,
   reports,
   showRisks,
   showReports,
@@ -261,8 +265,31 @@ export default function MapView({
           />
         )}
 
-        {/* 위치별 간접흡연 위험도 */}
-        {showRisks &&
+        {/* B2G: 기존 반투명 다색 보행로 유지 */}
+        {audience === "b2g" && showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
+          <GeoJSON
+            key={`clean-roads-b2g-${cleanlinessEdges.length}`}
+            data={{ type: "FeatureCollection", features: cleanlinessEdges } as FeatureCollection}
+            style={(feature) => ({
+              color: getCleanColor(Number(feature?.properties?.cleanIndex ?? 100)),
+              weight: 5,
+              opacity: 0.36,
+            })}
+            onEachFeature={(feature, layer) => {
+              const clean = Number(feature.properties?.cleanIndex ?? 100);
+              const risk = Number(feature.properties?.score ?? 0);
+              layer.bindPopup(`보행 링크 청정지수: ${clean.toFixed(1)}/100<br/>유효 위험점수: ${risk.toFixed(1)}/100`);
+            }}
+          />
+        )}
+
+        {/* B2C: 초록색 단일 Canvas, 픽셀별 최대 불투명도만 적용 */}
+        {audience === "b2c" && showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
+          <B2CCleanRoads edges={cleanlinessEdges} />
+        )}
+
+        {/* 구형 데이터 사용 화면에만 기존 위험 원형 유지. 모델 보행로와 중복 표시하지 않음. */}
+        {audience === "b2c" && !cleanlinessEdges && showRisks &&
           risks.map((risk) => (
             <Circle
               key={risk.id}
@@ -270,8 +297,8 @@ export default function MapView({
               radius={risk.radiusM}
               bubblingMouseEvents={false}
               pathOptions={{
-                color: audience === "b2g" ? getRiskColor(risk.score) : "#64748b",
-                fillColor: audience === "b2g" ? getRiskColor(risk.score) : "#93c5d6",
+                color: "#64748b",
+                fillColor: "#93c5d6",
                 fillOpacity: 0.35,
                 weight: 1,
               }}

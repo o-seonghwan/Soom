@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import MapView from "./components/MapView";
-import RiskLegend from "./components/RiskLegend";
 import ReportForm from "./components/ReportForm";
 import RoutePanel from "./components/RoutePanel";
 
@@ -20,6 +19,8 @@ import type {
 
 import { getRoutes } from "./services/routeService";
 import { getRisks } from "./services/riskService";
+import { getB2GCleanEdges } from "./services/cleanlinessService";
+import type { CleanEdgeFeature } from "./types/cleanliness";
 import {
   getReports,
   createReport,
@@ -139,6 +140,9 @@ export default function App() {
   const [risks, setRisks] =
     useState<RiskLocation[]>([]);
 
+  const [cleanlinessEdges, setCleanlinessEdges] =
+    useState<CleanEdgeFeature[]>([]);
+
   const [riskLoading, setRiskLoading] =
     useState(true);
 
@@ -203,18 +207,24 @@ export default function App() {
 
     async function loadInitialData() {
       try {
-        const riskData = await getRisks();
+        const [riskData, edgeData] = await Promise.all([
+          getRisks(),
+          getB2GCleanEdges(),
+        ]);
 
         if (!cancelled) {
           setRisks(riskData);
+          setCleanlinessEdges(edgeData.features);
           setRiskError(null);
         }
       } catch (error) {
         console.error("위험도 조회 실패:", error);
 
         if (!cancelled) {
+          setRisks([]);
+          setCleanlinessEdges([]);
           setRiskError(
-            "위험도 데이터를 불러오지 못했습니다."
+            "AI 모델 청정지수 보행로를 불러오지 못했습니다. LUNG_RISK_CSV 설정을 확인하세요."
           );
         }
       } finally {
@@ -572,6 +582,7 @@ export default function App() {
           end={end}
           routes={routes}
           risks={risks}
+          cleanlinessEdges={cleanlinessEdges}
           reports={reports}
           showRisks={showRisks}
           showReports={showReports}
@@ -582,7 +593,15 @@ export default function App() {
 
         {showRisks &&
           !riskLoading &&
-          !riskError && <RiskLegend />}
+          !riskError && cleanlinessEdges.length > 0 && (
+            <div className="absolute bottom-14 left-3 z-[500] rounded-xl bg-white/95 p-3 text-xs shadow-lg">
+              <p className="font-bold text-slate-800">보행로 청정지수 · AI 모델</p>
+              <p className="mt-1 text-gray-600">초록색이 진할수록 청정지수가 높음</p>
+              <div className="mt-2 h-2 w-44 rounded" style={{background: "linear-gradient(90deg, rgba(22,163,74,0.18), rgba(22,163,74,0.85))"}} />
+              <div className="mt-1 flex justify-between text-gray-500"><span>청정지수 낮음</span><span>청정지수 높음</span></div>
+              <p className="mt-2 text-[10px] text-gray-500">15레벨 이상 확대 시 표시 · 모델 예측 기반 · 실측 대기질 아님</p>
+            </div>
+          )}
       </main>
 
       {/* 하단 패널 */}
@@ -678,7 +697,7 @@ export default function App() {
               }
               className="h-4 w-4 accent-green-600"
             />
-            위험지역 표시
+            보행로 청정지수 표시
           </label>
 
           <label className="flex items-center gap-2 text-sm">
@@ -719,7 +738,7 @@ export default function App() {
         )}
 
         <p className="mt-3 text-xs text-gray-500">
-          ※ 현재 위험도는 Mock 데이터입니다.
+          ※ 청정지수는 모델 위험점수 기반 파생 지표이며 실측 대기질이 아닙니다.
           공개 지도에는 승인된 제보만 표시되며,
           사용자 제보는 위험 회피 A*에 자동으로
           반영되지 않습니다.
