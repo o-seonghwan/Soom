@@ -23,6 +23,7 @@ import type { Report } from "../types/report";
 import { getCleanColor } from "../utils/cleanColor";
 import type { CleanEdgeFeature } from "../types/cleanliness";
 import B2CCleanRoads from "./B2CCleanRoads";
+import MapRouteCard from "./MapRouteCard";
 import "leaflet/dist/leaflet.css";
 
 // 강남구 지도 중심 (초기 임시 위치)
@@ -43,6 +44,10 @@ interface MapViewProps {
   showReports: boolean;
   reportLocation: Coordinate | null;
   focusPoint: Coordinate | null;
+  selectionMode?: "start" | "end";
+  onSelectLocation?: (mode: "start" | "end") => void;
+  onSwapLocations?: () => void;
+  onLocate?: () => void;
   onMapClick: (point: Coordinate) => void;
 }
 
@@ -81,6 +86,26 @@ function MapFocus({
     );
   }, [map, point]);
 
+  return null;
+}
+
+// Once routing finishes, fit the complete route bounds rather than the last selected point.
+function FitRoutes({ routes }: { routes: Route[] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (routes.length === 0) return;
+    const points = routes.flatMap(route => route.coordinates);
+    if (points.length === 0) return;
+    const bounds = L.latLngBounds(points.map(([lat, lng]) => [lat, lng] as [number, number]));
+    if (bounds.isValid()) {
+      map.fitBounds(bounds.pad(0.06), {
+        animate: true,
+        paddingTopLeft: [35, 155],
+        paddingBottomRight: [45, 65],
+        maxZoom: 17,
+      });
+    }
+  }, [map, routes]);
   return null;
 }
 
@@ -176,6 +201,10 @@ export default function MapView({
   showReports,
   reportLocation,
   focusPoint,
+  selectionMode = "start",
+  onSelectLocation,
+  onSwapLocations,
+  onLocate,
   onMapClick,
 }: MapViewProps) {
   // 실제 강남구 경계 GeoJSON
@@ -184,6 +213,34 @@ export default function MapView({
 
   const [boundaryError, setBoundaryError] =
     useState(false);
+
+  const [showSmokingZones, setShowSmokingZones] = useState(false);
+  const [smokingZones, setSmokingZones] = useState<Array<{id:string;name:string;lat:number;lng:number}>>([]);
+  const [smokingZonesMessage, setSmokingZonesMessage] = useState("");
+
+  useEffect(() => {
+    if (!showSmokingZones) return;
+    let active = true;
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+    fetch(`${apiBase}/api/smoking-zones`)
+      .then(async response => {
+        if (!response.ok) throw new Error(`흡연구역 API 요청 실패 (${response.status})`);
+        return await response.json() as {source: string; zones: Array<{id:string;name:string;lat:number;lng:number}>};
+      })
+      .then(result => {
+        if (!active) return;
+        setSmokingZones(result.zones);
+        setSmokingZonesMessage(result.source === "not-configured"
+          ? "흡연구역 위치 자료가 아직 연결되지 않았습니다."
+          : result.zones.length === 0 ? "연결된 흡연구역 자료에 표시할 위치가 없습니다." : "");
+      })
+      .catch(error => {
+        if (!active) return;
+        setSmokingZones([]);
+        setSmokingZonesMessage(error instanceof Error ? error.message : "흡연구역 조회 실패");
+      });
+    return () => { active = false; };
+  }, [showSmokingZones]);
 
   // 최초 한 번 경계 파일 읽기
   useEffect(() => {
@@ -246,6 +303,7 @@ export default function MapView({
         {/* 지도 입력 및 이동 */}
         <MapClickHandler onMapClick={onMapClick} />
         <MapFocus point={focusPoint} />
+        <FitRoutes routes={routes} />
 
         {/* 강남구 전체가 보이도록 초기 조정 */}
         <BoundaryFocus boundary={boundary} />
@@ -353,8 +411,8 @@ export default function MapView({
             pathOptions={{
               color:
                 route.id === "shortest"
-                  ? "#2563eb"
-                  : "#16a34a",
+                  ? "#D8DAD3"
+                  : "#A68A64",
               weight: route.id === "shortest" ? 5 : 6,
               opacity: 0.95,
             }}
@@ -364,6 +422,15 @@ export default function MapView({
               <div>거리: {route.distanceM}m</div>
             </Popup>
           </Polyline>
+        ))}
+
+        {/* Publicly documented smoking facilities only (no no-smoking data). */}
+        {showSmokingZones && smokingZones.map(zone => (
+          <CircleMarker key={zone.id} center={[zone.lat, zone.lng]} radius={7}
+            bubblingMouseEvents={false}
+            pathOptions={{ color: "#92400e", fillColor: "#f59e0b", fillOpacity: 0.9, weight: 2 }}>
+            <Popup><strong>{zone.name}</strong><div>흡연구역 위치 자료에 등록된 시설</div></Popup>
+          </CircleMarker>
         ))}
 
         {/* 사용자 제보 */}
@@ -439,6 +506,34 @@ export default function MapView({
         )}
       </MapContainer>
 
+      {audience === "b2c" && onSelectLocation && onSwapLocations && (
+        <div className="pointer-events-none absolute left-3 top-3 z-[650] w-[min(350px,calc(100%-5.5rem))]">
+          <MapRouteCard start={start} end={end} selectionMode={selectionMode}
+            onSelect={onSelectLocation} onSwap={onSwapLocations} />
+        </div>
+      )}
+
+      <div className="absolute right-3 top-3 z-[650] flex flex-col items-end gap-2">
+        <button type="button" onClick={() => setShowSmokingZones(value => !value)}
+          aria-label={showSmokingZones ? "흡연구역 숨기기" : "흡연구역 표시"}
+          aria-pressed={showSmokingZones}
+          className={`flex h-11 w-11 items-center justify-center rounded-full border bg-white text-lg shadow-lg ${showSmokingZones ? "border-amber-500 text-amber-700" : "border-slate-200 text-slate-700"}`}
+          title={showSmokingZones ? "흡연구역 숨기기" : "흡연구역 표시"}>🚬</button>
+        {showSmokingZones && smokingZonesMessage && (
+          <p role="status" className="max-w-52 rounded-lg bg-white/95 p-2 text-xs text-slate-700 shadow">
+            {smokingZonesMessage}
+          </p>
+        )}
+      </div>
+
+      {audience === "b2c" && onLocate && (
+        <button type="button" onClick={onLocate} aria-label="현재 위치로 지도 이동"
+          title="현재 위치로 지도 이동 (위치 권한 동의 필요)"
+          className="absolute bottom-20 right-3 z-[650] flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-xl text-sky-600 shadow-lg">
+          ◎
+        </button>
+      )}
+
       {audience === "b2g" && showReports && (
         <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex flex-wrap gap-3 rounded-lg bg-white/95 px-3 py-2 text-xs shadow">
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-amber-400" />검토 대기</span>
@@ -453,25 +548,6 @@ export default function MapView({
         </div>
       )}
 
-      {/* 강남구 경계 안내 */}
-      <div className="pointer-events-none absolute right-3 top-3 z-[500] rounded-lg bg-white/95 px-3 py-2 text-xs shadow">
-        {boundaryError ? (
-          <span className="text-red-600">
-            강남구 경계를 불러오지 못했습니다.
-          </span>
-        ) : boundary ? (
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-sm bg-slate-500/60" />
-            <span className="font-semibold text-gray-700">
-              강남구 서비스 지역
-            </span>
-          </div>
-        ) : (
-          <span className="text-gray-500">
-            강남구 경계 로딩 중...
-          </span>
-        )}
-      </div>
     </div>
   );
 }
