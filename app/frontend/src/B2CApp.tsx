@@ -230,6 +230,17 @@ export default function App() {
     useRef<number | null>(null);
 
   const searchInProgress = useRef(false);
+  const routeRequestController = useRef<AbortController | null>(null);
+  const routeRequestSequence = useRef(0);
+  const avoidanceSearchTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (avoidanceSearchTimer.current !== null) window.clearTimeout(avoidanceSearchTimer.current);
+      routeRequestSequence.current += 1;
+      routeRequestController.current?.abort();
+    };
+  }, []);
 
   // ---------------------------------------
   // 위험도 데이터
@@ -522,15 +533,18 @@ export default function App() {
   // 11. A* 경로 탐색
   // =======================================
 
-  async function handleSearch() {
-    if (
-      !start ||
-      !end ||
-      searchInProgress.current
-    ) {
-      return;
-    }
+  async function handleSearch(level: RouteRequest["avoidanceLevel"] = avoidanceLevel, auto = false) {
+    if (!start || !end) return;
 
+    // A new slider setting supersedes any pending or in-flight route request.
+    if (avoidanceSearchTimer.current !== null) {
+      window.clearTimeout(avoidanceSearchTimer.current);
+      avoidanceSearchTimer.current = null;
+    }
+    routeRequestController.current?.abort();
+    const controller = new AbortController();
+    routeRequestController.current = controller;
+    const sequence = ++routeRequestSequence.current;
     searchInProgress.current = true;
     searchStartTime.current = performance.now();
 
@@ -540,42 +554,57 @@ export default function App() {
     setRoutes([]);
 
     try {
-      const result = await getRoutes({
-        start,
-        end,
-        avoidanceLevel,
-      });
+      const result = await getRoutes({ start, end, avoidanceLevel: level }, controller.signal);
+      if (controller.signal.aborted || sequence !== routeRequestSequence.current) return;
 
       setRoutes(result.routes);
       setSearchStatus("success");
-      // Collapse overlays so both complete route lines remain visible.
-      setShowControls(false);
-      setPageMode("shortest");
-    } catch (error) {
-      console.error("경로 탐색 오류:", error);
-
-      setSearchStatus("error");
-
-      window.alert(
-        error instanceof Error
-          ? error.message
-          : "경로 탐색에 실패했습니다."
-      );
-    } finally {
-      if (searchStartTime.current !== null) {
-        setElapsedSeconds(
-          (performance.now() -
-            searchStartTime.current) / 1000
-        );
+      if (!auto) {
+        // Manual searches keep the existing result-first experience.
+        setShowControls(false);
+        setPageMode("shortest");
       }
-
-      searchStartTime.current = null;
-      searchInProgress.current = false;
-
-      setLoading(false);
+    } catch (error) {
+      if (controller.signal.aborted || sequence !== routeRequestSequence.current) return;
+      console.error("경로 탐색 오류:", error);
+      setSearchStatus("error");
+      if (!auto) {
+        window.alert(error instanceof Error ? error.message : "경로 탐색에 실패했습니다.");
+      }
+    } finally {
+      if (sequence === routeRequestSequence.current) {
+        if (searchStartTime.current !== null) {
+          setElapsedSeconds((performance.now() - searchStartTime.current) / 1000);
+        }
+        searchStartTime.current = null;
+        searchInProgress.current = false;
+        routeRequestController.current = null;
+        setLoading(false);
+      }
     }
   }
 
+  function handleAvoidanceLevelChange(value: RouteRequest["avoidanceLevel"]) {
+    if (value === avoidanceLevel) return;
+    setAvoidanceLevel(value);
+    if (!start || !end) {
+      clearSearchResult();
+      return;
+    }
+
+    // Debounce rapid slider changes; only the final setting gets a request.
+    if (avoidanceSearchTimer.current !== null) {
+      window.clearTimeout(avoidanceSearchTimer.current);
+    }
+    routeRequestController.current?.abort();
+    routeRequestSequence.current += 1;
+    searchInProgress.current = false;
+    setLoading(false);
+    avoidanceSearchTimer.current = window.setTimeout(() => {
+      avoidanceSearchTimer.current = null;
+      void handleSearch(value, true);
+    }, 250);
+  }
 
   // =======================================
   // 12. 경로 초기화
@@ -750,7 +779,7 @@ export default function App() {
 
         {pageMode === "route" && (
           <RoutePanel avoidanceLevel={avoidanceLevel} loading={loading}
-            onAvoidanceLevelChange={value => { setAvoidanceLevel(value); clearSearchResult(); }} />
+            onAvoidanceLevelChange={handleAvoidanceLevelChange} />
         )}
 
         {pageMode === "shortest" && (
