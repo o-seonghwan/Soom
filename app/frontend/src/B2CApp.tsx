@@ -209,7 +209,7 @@ export default function App() {
   }, [end]);
 
   const [avoidanceLevel, setAvoidanceLevel] =
-    useState<RouteRequest["avoidanceLevel"]>("medium");
+    useState<RouteRequest["avoidanceLevel"]>(50);
 
   // ---------------------------------------
   // 경로 탐색 상태
@@ -607,18 +607,9 @@ export default function App() {
       return;
     }
 
-    // Debounce rapid slider changes; only the final setting gets a request.
-    if (avoidanceSearchTimer.current !== null) {
-      window.clearTimeout(avoidanceSearchTimer.current);
-    }
-    routeRequestController.current?.abort();
-    routeRequestSequence.current += 1;
-    searchInProgress.current = false;
-    setLoading(false);
-    avoidanceSearchTimer.current = window.setTimeout(() => {
-      avoidanceSearchTimer.current = null;
-      void handleSearch(value, true);
-    }, 250);
+    // Called only after drag release (or a completed keyboard action).
+    // handleSearch aborts the older request and accepts only the latest result.
+    void handleSearch(value, true);
   }
 
   // =======================================
