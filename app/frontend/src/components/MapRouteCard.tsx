@@ -46,8 +46,17 @@ export default function MapRouteCard({
           className="shrink-0 rounded-full px-1.5 py-2 text-xl text-slate-600 hover:bg-slate-100" title="출발지와 목적지 바꾸기">↕</button>
       </div>
       <button type="button" onClick={onSearch} disabled={!start || !end || loading}
-        className="shrink-0 rounded-2xl bg-[#343A40] px-3 py-3 text-xs font-bold text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40">
-        {loading ? "탐색 중" : "경로 탐색"}
+        aria-label={loading ? "경로 탐색 중" : "경로 탐색"}
+        title={loading ? "경로 탐색 중" : "경로 탐색"}
+        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-green-600 text-white shadow-sm hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40">
+        {loading ? (
+          <span className="text-xs font-bold" aria-hidden="true">탐색 중</span>
+        ) : (
+          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+        )}
       </button>
     </div>
   );
