@@ -40,6 +40,7 @@ interface MapViewProps {
   start: Coordinate | null;
   end: Coordinate | null;
   routes: Route[];
+  fitBoundsRoutes?: Route[];
   risks: RiskLocation[];
   cleanlinessEdges?: CleanEdgeFeature[];
   reports: Report[];
@@ -206,6 +207,7 @@ export default function MapView({
   start,
   end,
   routes,
+  fitBoundsRoutes = routes,
   risks,
   cleanlinessEdges,
   reports,
@@ -317,7 +319,7 @@ export default function MapView({
         {/* 지도 입력 및 이동 */}
         <MapClickHandler onMapClick={onMapClick} />
         <MapFocus point={focusPoint} />
-        <FitRoutes routes={routes} />
+        <FitRoutes routes={fitBoundsRoutes} />
 
         {/* 강남구 전체가 보이도록 초기 조정 */}
         <BoundaryFocus boundary={boundary} />
