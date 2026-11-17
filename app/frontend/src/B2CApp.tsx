@@ -101,6 +101,73 @@ export default function App() {
   const [focusPoint, setFocusPoint] =
     useState<Coordinate | null>(null);
 
+  // Location consent is requested only when entering B2C. Tracking never moves
+  // the map automatically; only a deliberate locate-button click does.
+  const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
+  const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(false);
+  const locationConsentRef = useRef<boolean | null>(null);
+  const focusOnNextLocationRef = useRef(false);
+
+  useEffect(() => {
+    if (locationConsentRef.current !== null) return;
+    if (!navigator.geolocation) {
+      locationConsentRef.current = false;
+      return;
+    }
+    const agreed = window.confirm(
+      "숨구리당당에서 내 위치를 지도에 표시하기 위해 위치 정보 사용에 동의하시겠습니까? 동의하면 B2C 이용 중 위치가 갱신되며, 지도는 현재 위치 버튼을 누를 때만 이동합니다."
+    );
+    locationConsentRef.current = agreed;
+    setLocationTrackingEnabled(agreed);
+  }, []);
+
+  useEffect(() => {
+    if (!locationTrackingEnabled || !navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      position => {
+        const point: Coordinate = [position.coords.latitude, position.coords.longitude];
+        setCurrentLocation(point);
+        if (focusOnNextLocationRef.current) {
+          focusOnNextLocationRef.current = false;
+          setFocusPoint([...point]);
+        }
+      },
+      error => {
+        console.warn("현재 위치 추적 오류:", error);
+        if (error.code === 1) {
+          setLocationTrackingEnabled(false);
+          setCurrentLocation(null);
+          focusOnNextLocationRef.current = false;
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [locationTrackingEnabled]);
+
+  function focusCurrentLocation() {
+    if (!navigator.geolocation) {
+      window.alert("현재 위치 기능을 지원하지 않습니다.");
+      return;
+    }
+    if (currentLocation) {
+      setFocusPoint([...currentLocation]);
+      return;
+    }
+    // A declined entry consent can be enabled by explicitly tapping locate.
+    if (!locationTrackingEnabled) {
+      const agreed = window.confirm(
+        "내 위치 표시를 활성화하시겠습니까? 동의하면 B2C 이용 중 위치가 계속 갱신됩니다."
+      );
+      if (!agreed) return;
+      locationConsentRef.current = true;
+      setLocationTrackingEnabled(true);
+    }
+    focusOnNextLocationRef.current = true;
+  }
+
   // ---------------------------------------
   // 경로 입력 상태
   // ---------------------------------------
@@ -640,7 +707,8 @@ export default function App() {
           onSearch={() => void handleSearch()}
           onSelectLocation={setSelectionMode}
           onSwapLocations={swapLocations}
-          onLocate={() => requestCurrentLocation("focus")}
+          onLocate={focusCurrentLocation}
+          currentLocation={currentLocation}
           onMapClick={handleMapClick}
         />
 
