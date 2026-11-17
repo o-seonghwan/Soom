@@ -255,7 +255,21 @@ export default function MapView({
     const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
     fetch(`${apiBase}/api/smoking-zones`)
       .then(async response => {
-        if (!response.ok) throw new Error(`흡연구역 API 요청 실패 (${response.status})`);
+        if (!response.ok) {
+          let detail = "";
+          try {
+            const payload: unknown = await response.json();
+            if (payload && typeof payload === "object" && "detail" in payload) {
+              const value = payload.detail;
+              if (typeof value === "string") detail = value;
+            }
+          } catch {
+            // The backend may return a non-JSON error response.
+          }
+          throw new Error(detail
+            ? `흡연구역 데이터 오류 (${response.status}): ${detail}`
+            : `흡연구역 API 요청 실패 (${response.status}). 백엔드 로그 및 LUNG_SMOKING_ZONES_CSV 설정을 확인하세요.`);
+        }
         return await response.json() as {source: string; zones: Array<{id:string;name:string;lat:number;lng:number;locationAccuracy?: "verified" | "address-level" | "unspecified";address?:string;source?:string}>};
       })
       .then(result => {
