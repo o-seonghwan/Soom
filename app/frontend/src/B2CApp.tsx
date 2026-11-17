@@ -113,26 +113,31 @@ export default function App() {
 
   const [startText, setStartText] = useState("");
   const [endText, setEndText] = useState("");
-  const [startAddress, setStartAddress] = useState<string | null>(null);
-  const [endAddress, setEndAddress] = useState<string | null>(null);
+  // Bind lookup results to their coordinates so an old address never flashes for a new point.
+  const [startLookup, setStartLookup] = useState<{ key: string; address: string | null } | null>(null);
+  const [endLookup, setEndLookup] = useState<{ key: string; address: string | null } | null>(null);
+  const startAddress = start ? (startLookup?.key === start.join(",") ? startLookup.address : undefined) : null;
+  const endAddress = end ? (endLookup?.key === end.join(",") ? endLookup.address : undefined) : null;
   const [showCoordinates, setShowCoordinates] = useState(false);
 
   // Geocoding is for display only; route coordinates remain unchanged.
   useEffect(() => {
     if (!start) return;
     const controller = new AbortController();
+    const key = start.join(",");
     void lookupAddress(start, controller.signal)
-      .then(setStartAddress)
-      .catch(error => { if (!controller.signal.aborted) { console.warn("출발지 주소 조회:", error); setStartAddress(null); } });
+      .then(address => { if (!controller.signal.aborted) setStartLookup({ key, address }); })
+      .catch(error => { if (!controller.signal.aborted) { console.warn("출발지 주소 조회:", error); setStartLookup({ key, address: null }); } });
     return () => controller.abort();
   }, [start]);
 
   useEffect(() => {
     if (!end) return;
     const controller = new AbortController();
+    const key = end.join(",");
     void lookupAddress(end, controller.signal)
-      .then(setEndAddress)
-      .catch(error => { if (!controller.signal.aborted) { console.warn("목적지 주소 조회:", error); setEndAddress(null); } });
+      .then(address => { if (!controller.signal.aborted) setEndLookup({ key, address }); })
+      .catch(error => { if (!controller.signal.aborted) { console.warn("목적지 주소 조회:", error); setEndLookup({ key, address: null }); } });
     return () => controller.abort();
   }, [end]);
 
@@ -331,11 +336,11 @@ export default function App() {
   ) {
     if (mode === "start") {
       setStart(point);
-      setStartAddress(null);
+      setStartLookup(null);
       setStartText(formatCoordinate(point));
     } else {
       setEnd(point);
-      setEndAddress(null);
+      setEndLookup(null);
       setEndText(formatCoordinate(point));
     }
 
@@ -436,8 +441,8 @@ export default function App() {
     if (searchInProgress.current) return;
     setStart(end);
     setEnd(start);
-    setStartAddress(endAddress);
-    setEndAddress(startAddress);
+    setStartLookup(endLookup);
+    setEndLookup(startLookup);
     setStartText(end ? formatCoordinate(end) : "");
     setEndText(start ? formatCoordinate(start) : "");
     setSelectionMode(start ? "end" : "start");
@@ -516,8 +521,8 @@ export default function App() {
 
     setStart(null);
     setEnd(null);
-    setStartAddress(null);
-    setEndAddress(null);
+    setStartLookup(null);
+    setEndLookup(null);
 
     setStartText("");
     setEndText("");
@@ -624,6 +629,8 @@ export default function App() {
           reports={reports}
           showRisks={showRisks}
           showReports={showReports}
+          onToggleCleanliness={() => setShowRisks(value => !value)}
+          onToggleReports={() => setShowReports(value => !value)}
           reportLocation={reportLocation}
           focusPoint={focusPoint}
           selectionMode={selectionMode}
@@ -643,7 +650,7 @@ export default function App() {
             <div className="absolute bottom-14 left-3 z-[500] rounded-xl bg-white/95 p-3 text-xs shadow-lg">
               <p className="font-bold text-slate-800">보행로 청정지수 · AI 모델</p>
               <p className="mt-1 text-gray-600">초록색이 진할수록 청정지수가 높음</p>
-              <div className="mt-2 h-2 w-44 rounded" style={{background: "linear-gradient(90deg, rgba(22,163,74,0.18), rgba(22,163,74,0.85))"}} />
+              <div className="mt-2 h-2 w-full rounded" style={{background: "linear-gradient(90deg, rgba(22,163,74,0.18), rgba(22,163,74,0.85))"}} />
               <div className="mt-1 flex justify-between text-gray-500"><span>청정지수 낮음</span><span>청정지수 높음</span></div>
               <p className="mt-2 text-[10px] text-gray-500">15레벨 이상 확대 시 표시 · 모델 예측 기반 · 실측 대기질 아님</p>
             </div>
@@ -741,33 +748,6 @@ export default function App() {
             )}
           </div>
         )}
-
-        {/* 기존 지도 표시 설정 */}
-        <div className="mt-4 flex flex-wrap gap-4 border-t pt-3">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={showRisks}
-              onChange={(event) =>
-                setShowRisks(event.target.checked)
-              }
-              className="h-4 w-4 accent-green-600"
-            />
-            보행로 청정지수 표시
-          </label>
-
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={showReports}
-              onChange={(event) =>
-                setShowReports(event.target.checked)
-              }
-              className="h-4 w-4 accent-purple-600"
-            />
-            승인된 제보 표시 ({reports.length})
-          </label>
-        </div>
 
         {riskLoading && (
           <p className="mt-2 text-xs text-gray-500">
