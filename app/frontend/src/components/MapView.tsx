@@ -566,7 +566,7 @@ export default function MapView({
         <button type="button" onClick={onToggleCleanliness}
           aria-label={showRisks ? "보행로 청정지수 숨기기" : "보행로 청정지수 표시"}
           aria-pressed={showRisks} title="보행로 청정지수 표시 전환"
-          className={`flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 ${showRisks ? "border-black" : "border-slate-200"}`}>
+          className={`flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 ${showRisks ? "border-[#72EDDA]" : "border-[#1C2631]"}`}>
           <img src={showRisks ? "/icons/cleanliness-on.png" : "/icons/cleanliness-off.png"}
             alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
         </button>
