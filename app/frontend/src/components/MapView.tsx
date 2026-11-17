@@ -7,6 +7,7 @@ import {
   TileLayer,
   ZoomControl,
   CircleMarker,
+  Marker,
   Circle,
   Polyline,
   Popup,
@@ -28,6 +29,16 @@ import RoutePanel from "./RoutePanel";
 import type { RouteRequest } from "../types/route";
 import { deduplicateCleanEdges } from "../utils/deduplicateCleanEdges";
 import "leaflet/dist/leaflet.css";
+
+// Smoking-area positions use the same cigarette pictogram as the layer toggle.
+// Inline DivIcon avoids external icon asset paths and stays legible at any map zoom.
+const smokingZoneIcon = L.divIcon({
+  className: "lung-smoking-zone-icon",
+  html: '<span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:2px solid #92400e;border-radius:50%;background:#fff7ed;box-shadow:0 2px 7px rgba(0,0,0,.25);font-size:19px;line-height:1">🚬</span>',
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -17],
+});
 
 // 강남구 지도 중심 (초기 임시 위치)
 const GANGNAM_CENTER: Coordinate = [
@@ -235,7 +246,7 @@ export default function MapView({
     useState<GeoJsonObject | null>(null);
 
   const [showSmokingZones, setShowSmokingZones] = useState(false);
-  const [smokingZones, setSmokingZones] = useState<Array<{id:string;name:string;lat:number;lng:number}>>([]);
+  const [smokingZones, setSmokingZones] = useState<Array<{id:string;name:string;lat:number;lng:number;locationAccuracy?: "verified" | "address-level" | "unspecified";address?:string;source?:string}>>([]);
   const [smokingZonesMessage, setSmokingZonesMessage] = useState("");
 
   useEffect(() => {
@@ -244,8 +255,22 @@ export default function MapView({
     const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
     fetch(`${apiBase}/api/smoking-zones`)
       .then(async response => {
-        if (!response.ok) throw new Error(`흡연구역 API 요청 실패 (${response.status})`);
-        return await response.json() as {source: string; zones: Array<{id:string;name:string;lat:number;lng:number}>};
+        if (!response.ok) {
+          let detail = "";
+          try {
+            const payload: unknown = await response.json();
+            if (payload && typeof payload === "object" && "detail" in payload) {
+              const value = payload.detail;
+              if (typeof value === "string") detail = value;
+            }
+          } catch {
+            // The backend may return a non-JSON error response.
+          }
+          throw new Error(detail
+            ? `흡연구역 데이터 오류 (${response.status}): ${detail}`
+            : `흡연구역 API 요청 실패 (${response.status}). 백엔드 로그 및 LUNG_SMOKING_ZONES_CSV 설정을 확인하세요.`);
+        }
+        return await response.json() as {source: string; zones: Array<{id:string;name:string;lat:number;lng:number;locationAccuracy?: "verified" | "address-level" | "unspecified";address?:string;source?:string}>};
       })
       .then(result => {
         if (!active) return;
@@ -439,11 +464,15 @@ export default function MapView({
 
         {/* Publicly documented smoking facilities only (no no-smoking data). */}
         {showSmokingZones && smokingZones.map(zone => (
-          <CircleMarker key={zone.id} center={[zone.lat, zone.lng]} radius={7}
-            bubblingMouseEvents={false}
-            pathOptions={{ color: "#92400e", fillColor: "#f59e0b", fillOpacity: 0.9, weight: 2 }}>
-            <Popup><strong>{zone.name}</strong><div>흡연구역 위치 자료에 등록된 시설</div></Popup>
-          </CircleMarker>
+          <Marker key={zone.id} position={[zone.lat, zone.lng]} icon={smokingZoneIcon}
+            bubblingMouseEvents={false} title={zone.name}>
+            <Popup>
+              <strong>{zone.name}</strong>
+              <div>{zone.address || "주소 정보 없음"}</div>
+              <div>{zone.locationAccuracy === "verified" ? "현장 위치 검증됨" : zone.locationAccuracy === "address-level" ? "주소 기반 추정 위치 · 실제 흡연시설 위치와 다를 수 있음" : "위치 검증 여부 미확인"}</div>
+              {zone.source && <div>출처: {zone.source}</div>}
+            </Popup>
+          </Marker>
         ))}
 
         {/* 사용자 제보 */}
@@ -540,12 +569,14 @@ export default function MapView({
           className={`flex h-11 w-11 items-center justify-center rounded-full border bg-white text-xl shadow-lg ${showRisks ? "border-green-500 text-green-700" : "border-slate-200 text-slate-500"}`}>
           🌿
         </button>
-        <button type="button" onClick={onToggleReports}
-          aria-label={showReports ? "제보 숨기기" : "제보 표시"} aria-pressed={showReports}
-          title="제보 표시 전환"
-          className={`flex h-11 w-11 items-center justify-center rounded-full border bg-white text-xl shadow-lg ${showReports ? "border-purple-500 text-purple-700" : "border-slate-200 text-slate-500"}`}>
-          📍
-        </button>
+        {audience === "b2g" && (
+          <button type="button" onClick={onToggleReports}
+            aria-label={showReports ? "제보 숨기기" : "제보 표시"} aria-pressed={showReports}
+            title="제보 표시 전환"
+            className={`flex h-11 w-11 items-center justify-center rounded-full border bg-white text-xl shadow-lg ${showReports ? "border-purple-500 text-purple-700" : "border-slate-200 text-slate-500"}`}>
+            📍
+          </button>
+        )}
         <button type="button" onClick={() => setShowSmokingZones(value => !value)}
           aria-label={showSmokingZones ? "흡연구역 숨기기" : "흡연구역 표시"}
           aria-pressed={showSmokingZones}

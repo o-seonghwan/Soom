@@ -4,6 +4,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+import smoking_zones
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from smoking_zones import load_smoking_zones
 
@@ -20,7 +22,28 @@ class SmokingZonesTests(unittest.TestCase):
 
     def test_no_csv_does_not_invent_zones(self):
         os.environ.pop("LUNG_SMOKING_ZONES_CSV", None)
-        self.assertEqual(load_smoking_zones(), {"source": "not-configured", "zones": []})
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.csv"
+            with patch.object(smoking_zones, "DEFAULT_SMOKING_ZONES_CSV", missing):
+                self.assertEqual(load_smoking_zones(), {"source": "not-configured", "zones": []})
+
+    def test_stale_configured_path_uses_project_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "gangnam_smoking_zones.csv"
+            path.write_text("name,lat,lng,locationAccuracy\\n테스트 시설,37.50,127.02,address-level\\n",
+                            encoding="utf-8-sig")
+            os.environ["LUNG_SMOKING_ZONES_CSV"] = str(Path(directory) / "old_missing.csv")
+            with patch.object(smoking_zones, "DEFAULT_SMOKING_ZONES_CSV", path):
+                data = load_smoking_zones()
+                self.assertEqual(len(data["zones"]), 1)
+                self.assertEqual(data["zones"][0]["locationAccuracy"], "address-level")
+
+    def test_stale_path_and_missing_default_raise(self):
+        with tempfile.TemporaryDirectory() as directory:
+            os.environ["LUNG_SMOKING_ZONES_CSV"] = str(Path(directory) / "old_missing.csv")
+            with patch.object(smoking_zones, "DEFAULT_SMOKING_ZONES_CSV", Path(directory) / "missing.csv"):
+                with self.assertRaises(FileNotFoundError):
+                    load_smoking_zones()
 
     def test_actual_csv_loaded(self):
         with tempfile.TemporaryDirectory() as directory:
