@@ -5,13 +5,39 @@ import os
 from pathlib import Path
 
 
-def load_smoking_zones():
+# Resolve from this Python file, not the process working directory.
+# Supports local Windows paths containing spaces and Korean characters.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SMOKING_ZONES_CSV = (
+    PROJECT_ROOT / "data" / "processed" / "결과" / "전처리기반"
+    / "특성_강남구" / "gangnam_smoking_zones.csv"
+)
+
+
+def _resolve_smoking_csv():
     configured = os.environ.get("LUNG_SMOKING_ZONES_CSV", "").strip()
-    if not configured:
+    if configured:
+        path = Path(configured).expanduser().resolve()
+        if path.is_file():
+            return path
+        # The legacy sample path may persist in a different shell or .env.
+        # Fall back ONLY to the exact Gangnam smoking-zones output, never
+        # to enforcement, litter, no-smoking, or other datasets.
+        if DEFAULT_SMOKING_ZONES_CSV.is_file():
+            return DEFAULT_SMOKING_ZONES_CSV
+        raise FileNotFoundError(
+            f"흡연구역 CSV 파일이 없습니다: {path}. "
+            f"프로젝트 기본 경로도 확인하세요: {DEFAULT_SMOKING_ZONES_CSV}"
+        )
+    if DEFAULT_SMOKING_ZONES_CSV.is_file():
+        return DEFAULT_SMOKING_ZONES_CSV
+    return None
+
+
+def load_smoking_zones():
+    path = _resolve_smoking_csv()
+    if path is None:
         return {"source": "not-configured", "zones": []}
-    path = Path(configured).expanduser().resolve()
-    if not path.is_file():
-        raise FileNotFoundError(f"흡연구역 CSV 파일이 없습니다: {path}")
     with path.open("r", encoding="utf-8-sig", newline="") as file:
         reader = csv.DictReader(file)
         fields = set(reader.fieldnames or [])
