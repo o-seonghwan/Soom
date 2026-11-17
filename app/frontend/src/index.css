@@ -16,3 +16,9 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Keep Leaflet zoom controls above the bottom-right attribution credits.
+   Scoped to both service maps; Leaflet attribution remains visible. */
+.lung-map .leaflet-bottom.leaflet-right .leaflet-control-zoom {
+  margin-bottom: 42px;
+}
