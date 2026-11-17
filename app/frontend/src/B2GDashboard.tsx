@@ -171,7 +171,7 @@ export default function B2GDashboard() {
             }
           }}
           aria-expanded={!adminAuthorized ? showAdminPanel : undefined}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow">
+          className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow">
           {adminAuthorized ? "관리자 로그아웃" : "관리자 로그인"}
         </button>
       </div>
