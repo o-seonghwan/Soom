@@ -249,14 +249,17 @@ def calculate_safest_route(
     원본 그래프와 원본 edge_risks는 변경하지 않음.
     """
 
-    if avoidance_level not in AVOIDANCE_WEIGHTS:
-        raise ValueError(
-            "올바르지 않은 회피 강도입니다."
-        )
-
-    risk_weight = AVOIDANCE_WEIGHTS[
-        avoidance_level
-    ]
+    if isinstance(avoidance_level, str):
+        if avoidance_level not in AVOIDANCE_WEIGHTS:
+            raise ValueError("올바르지 않은 회피 강도입니다.")
+        risk_weight = AVOIDANCE_WEIGHTS[avoidance_level]
+    else:
+        # 0~100 continuous slider mapped linearly to an A* risk multiplier.
+        # 0 means distance-only; 100 has the former "high" intensity (6.0).
+        value = float(avoidance_level)
+        if not math.isfinite(value) or not (0 <= value <= 100):
+            raise ValueError("회피 강도는 0~100 사이여야 합니다.")
+        risk_weight = 6.0 * value / 100.0
 
     # 1. 좌표 변환기
     to_graph, to_wgs84 = get_transformers(
