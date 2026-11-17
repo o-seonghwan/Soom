@@ -394,6 +394,19 @@ export default function App() {
   // 6. 경로 결과 초기화
   // =======================================
 
+  function cancelPendingRouteSearch() {
+    if (avoidanceSearchTimer.current !== null) {
+      window.clearTimeout(avoidanceSearchTimer.current);
+      avoidanceSearchTimer.current = null;
+    }
+    routeRequestController.current?.abort();
+    routeRequestController.current = null;
+    routeRequestSequence.current += 1;
+    searchInProgress.current = false;
+    searchStartTime.current = null;
+    setLoading(false);
+  }
+
   function clearSearchResult() {
     setRoutes([]);
 
@@ -412,6 +425,7 @@ export default function App() {
     mode: LocationMode,
     point: Coordinate
   ) {
+    cancelPendingRouteSearch();
     if (mode === "start") {
       setStart(point);
       setStartLookup(null);
@@ -517,6 +531,7 @@ export default function App() {
 
   function swapLocations() {
     if (searchInProgress.current) return;
+    cancelPendingRouteSearch();
     setStart(end);
     setEnd(start);
     setStartLookup(endLookup);
@@ -614,6 +629,7 @@ export default function App() {
     if (searchInProgress.current) {
       return;
     }
+    cancelPendingRouteSearch();
 
     setStart(null);
     setEnd(null);
