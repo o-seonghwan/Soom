@@ -7,6 +7,7 @@ import {
   TileLayer,
   ZoomControl,
   CircleMarker,
+  Marker,
   Circle,
   Polyline,
   Popup,
@@ -28,6 +29,16 @@ import RoutePanel from "./RoutePanel";
 import type { RouteRequest } from "../types/route";
 import { deduplicateCleanEdges } from "../utils/deduplicateCleanEdges";
 import "leaflet/dist/leaflet.css";
+
+// Smoking-area positions use the same cigarette pictogram as the layer toggle.
+// Inline DivIcon avoids external icon asset paths and stays legible at any map zoom.
+const smokingZoneIcon = L.divIcon({
+  className: "lung-smoking-zone-icon",
+  html: '<span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:2px solid #92400e;border-radius:50%;background:#fff7ed;box-shadow:0 2px 7px rgba(0,0,0,.25);font-size:19px;line-height:1">🚬</span>',
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -17],
+});
 
 // 강남구 지도 중심 (초기 임시 위치)
 const GANGNAM_CENTER: Coordinate = [
@@ -439,16 +450,15 @@ export default function MapView({
 
         {/* Publicly documented smoking facilities only (no no-smoking data). */}
         {showSmokingZones && smokingZones.map(zone => (
-          <CircleMarker key={zone.id} center={[zone.lat, zone.lng]} radius={7}
-            bubblingMouseEvents={false}
-            pathOptions={{ color: "#92400e", fillColor: "#f59e0b", fillOpacity: 0.9, weight: 2 }}>
+          <Marker key={zone.id} position={[zone.lat, zone.lng]} icon={smokingZoneIcon}
+            bubblingMouseEvents={false} title={zone.name}>
             <Popup>
               <strong>{zone.name}</strong>
               <div>{zone.address || "주소 정보 없음"}</div>
               <div>{zone.locationAccuracy === "verified" ? "현장 위치 검증됨" : zone.locationAccuracy === "address-level" ? "주소 기반 추정 위치 · 실제 흡연시설 위치와 다를 수 있음" : "위치 검증 여부 미확인"}</div>
               {zone.source && <div>출처: {zone.source}</div>}
             </Popup>
-          </CircleMarker>
+          </Marker>
         ))}
 
         {/* 사용자 제보 */}
