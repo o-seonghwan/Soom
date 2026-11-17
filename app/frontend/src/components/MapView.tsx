@@ -235,7 +235,7 @@ export default function MapView({
     useState<GeoJsonObject | null>(null);
 
   const [showSmokingZones, setShowSmokingZones] = useState(false);
-  const [smokingZones, setSmokingZones] = useState<Array<{id:string;name:string;lat:number;lng:number}>>([]);
+  const [smokingZones, setSmokingZones] = useState<Array<{id:string;name:string;lat:number;lng:number;locationAccuracy?: "verified" | "address-level" | "unspecified";address?:string;source?:string}>>([]);
   const [smokingZonesMessage, setSmokingZonesMessage] = useState("");
 
   useEffect(() => {
@@ -245,7 +245,7 @@ export default function MapView({
     fetch(`${apiBase}/api/smoking-zones`)
       .then(async response => {
         if (!response.ok) throw new Error(`흡연구역 API 요청 실패 (${response.status})`);
-        return await response.json() as {source: string; zones: Array<{id:string;name:string;lat:number;lng:number}>};
+        return await response.json() as {source: string; zones: Array<{id:string;name:string;lat:number;lng:number;locationAccuracy?: "verified" | "address-level" | "unspecified";address?:string;source?:string}>};
       })
       .then(result => {
         if (!active) return;
@@ -442,7 +442,12 @@ export default function MapView({
           <CircleMarker key={zone.id} center={[zone.lat, zone.lng]} radius={7}
             bubblingMouseEvents={false}
             pathOptions={{ color: "#92400e", fillColor: "#f59e0b", fillOpacity: 0.9, weight: 2 }}>
-            <Popup><strong>{zone.name}</strong><div>흡연구역 위치 자료에 등록된 시설</div></Popup>
+            <Popup>
+              <strong>{zone.name}</strong>
+              <div>{zone.address || "주소 정보 없음"}</div>
+              <div>{zone.locationAccuracy === "verified" ? "현장 위치 검증됨" : zone.locationAccuracy === "address-level" ? "주소 기반 추정 위치 · 실제 흡연시설 위치와 다를 수 있음" : "위치 검증 여부 미확인"}</div>
+              {zone.source && <div>출처: {zone.source}</div>}
+            </Popup>
           </CircleMarker>
         ))}
 
