@@ -35,6 +35,10 @@ export default function B2GDashboard() {
 
   const [showRisks, setShowRisks] =
     useState(true);
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [adminAuthorized, setAdminAuthorized] = useState(false);
+  const [logoutSignal, setLogoutSignal] = useState(0);
 
   const [focusPoint, setFocusPoint] =
     useState<Coordinate | null>(null);
@@ -140,13 +144,55 @@ export default function B2GDashboard() {
       {/* B2G 헤더 */}
       <header className="z-[1000] bg-white px-5 py-4 shadow-sm">
         <h1 className="pr-44 text-xl font-bold text-slate-800">
-          폐(Lung) 끼치지 마세요
+          숨구리당당
         </h1>
 
         <p className="mt-1 text-xs text-gray-500">
           B2G · 강남구 흡연 위험 분석 및 신고 관리
         </p>
       </header>
+
+      {/* Header admin control: left of the existing service selector in App.tsx. */}
+      <div className="absolute right-[4.25rem] top-3 z-[1201] flex items-center gap-2">
+        {adminAuthorized && (
+          <button type="button" onClick={() => setShowAdminPanel(value => !value)}
+            aria-expanded={showAdminPanel}
+            className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow">
+            관리자 관리
+          </button>
+        )}
+        <button type="button"
+          onClick={() => {
+            if (adminAuthorized) {
+              setLogoutSignal(value => value + 1);
+              setShowAdminPanel(false);
+            } else {
+              setShowAdminPanel(value => !value);
+            }
+          }}
+          aria-expanded={!adminAuthorized ? showAdminPanel : undefined}
+          className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow">
+          {adminAuthorized ? "관리자 로그아웃" : "관리자 로그인"}
+        </button>
+      </div>
+
+      {/* Keep authentication mounted while the independent panel is closed. */}
+      <aside aria-label="관리자 인증 및 신고 관리"
+        className={`absolute right-3 top-16 z-[1100] max-h-[min(72dvh,calc(100%-5rem))] w-[min(420px,calc(100%-24px))] overflow-y-auto rounded-2xl border bg-white p-4 shadow-xl ${showAdminPanel ? "" : "hidden"}`}>
+        <div className="mb-3 flex justify-end">
+          <button type="button" onClick={() => setShowAdminPanel(false)}
+            aria-label="관리자 창 닫기" className="rounded-lg border px-3 py-1 text-sm">닫기 ×</button>
+        </div>
+        <AdminDashboard
+          reports={publicReports}
+          risks={risks}
+          onFocusLocation={focusReportLocation}
+          onReviewCompleted={handleReviewCompleted}
+          onAdminReportsChange={setAdminReports}
+          onAuthorizedChange={(value) => { setAdminAuthorized(value); if (value) setShowAdminPanel(true); }}
+          logoutSignal={logoutSignal}
+        />
+      </aside>
 
       {/* B2G 지도 */}
       <main className="relative min-h-0 flex-1">
@@ -160,6 +206,8 @@ export default function B2GDashboard() {
           reports={visibleReports}
           showRisks={showRisks}
           showReports={showReports}
+          onToggleCleanliness={() => setShowRisks(value => !value)}
+          onToggleReports={() => setShowReports(value => !value)}
           reportLocation={null}
           focusPoint={focusPoint}
           onMapClick={() => {
@@ -182,10 +230,17 @@ export default function B2GDashboard() {
             <p className="mt-2 max-w-72 text-[10px] text-gray-600">높을수록 상대적으로 청정 · 비표시 구간은 데이터 없음 · 실측 대기질이 아님</p>
           </div>
         )}
+        {/* Independent collapsible B2G analysis dashboard */}
+              <button type="button" onClick={() => setShowDashboard(value => !value)}
+                aria-expanded={showDashboard}
+                className="absolute top-3 left-3 z-[1050] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-bold text-slate-700 shadow-lg">
+                {showDashboard ? "지자체 분석 대시보드 닫기 ×" : "지자체 분석 대시보드 ☰"}
+              </button>
+        
       </main>
 
-      {/* B2G 하단 분석 패널 */}
-      <section className="z-[1000] max-h-[55dvh] space-y-4 overflow-y-auto bg-white p-4 shadow-lg">
+      {showDashboard && (
+      <section className="z-[1000] max-h-[55dvh] space-y-4 overflow-y-auto bg-white p-4 pb-16 shadow-lg">
         <div>
           <h2 className="text-lg font-bold text-slate-800">
             지자체 분석 대시보드
@@ -194,33 +249,6 @@ export default function B2GDashboard() {
           <p className="mt-1 text-xs text-gray-500">
             위험지역, 신고 데이터 및 분석 결과
           </p>
-        </div>
-
-        {/* 지도 표시 설정 */}
-        <div className="flex flex-wrap gap-5 rounded-lg bg-slate-50 p-3">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={showReports}
-              onChange={(event) =>
-                setShowReports(event.target.checked)
-              }
-              className="h-4 w-4 accent-purple-600"
-            />
-            신고 위치 표시 ({visibleReports.length}건)
-          </label>
-
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={showRisks}
-              onChange={(event) =>
-                setShowRisks(event.target.checked)
-              }
-              className="h-4 w-4 accent-slate-600"
-            />
-            보행로 청정지수 표시
-          </label>
         </div>
 
         {/* 현재 데이터 현황 */}
@@ -302,17 +330,6 @@ export default function B2GDashboard() {
           </p>
         </div>
 
-        {/* 기존 관리자 신고 관리 재사용 */}
-        <div className="rounded-xl border border-slate-200 p-4">
-          <AdminDashboard
-            reports={publicReports}
-            risks={risks}
-            onFocusLocation={focusReportLocation}
-            onReviewCompleted={handleReviewCompleted}
-            onAdminReportsChange={setAdminReports}
-          />
-        </div>
-
         <p className="text-xs leading-5 text-gray-500">
           관리자 로그인 전에는 승인된 공개 신고만
           지도에 표시됩니다. 로그인 후에는
@@ -321,6 +338,7 @@ export default function B2GDashboard() {
           DBSCAN 분석은 아직 연결되지 않았습니다.
         </p>
       </section>
+      )}
     </div>
   );
 }

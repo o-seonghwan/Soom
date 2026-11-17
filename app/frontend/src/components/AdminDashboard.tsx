@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { Coordinate } from "../types/route";
 import type { RiskLocation } from "../types/risk";
@@ -26,6 +26,8 @@ interface AdminDashboardProps {
   onAdminReportsChange?: (
     reports: Report[] | null
   ) => void;
+  onAuthorizedChange?: (authorized: boolean) => void;
+  logoutSignal?: number;
 }
 
 const reportTypeLabels: Record<
@@ -82,6 +84,8 @@ export default function AdminDashboard({
   onFocusLocation,
   onReviewCompleted,
   onAdminReportsChange,
+  onAuthorizedChange,
+  logoutSignal = 0,
 }: AdminDashboardProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -183,6 +187,7 @@ export default function AdminDashboard({
       updateNotesFromReports(data);
 
       setAuthorized(true);
+      onAuthorizedChange?.(true);
       setMessage(
         "관리자 로그인이 완료되었습니다."
       );
@@ -191,6 +196,7 @@ export default function AdminDashboard({
       onAdminReportsChange?.(data);
     } catch (err) {
       setAuthorized(false);
+      onAuthorizedChange?.(false);
       setAdminReports([]);
       onAdminReportsChange?.(null);
 
@@ -206,6 +212,7 @@ export default function AdminDashboard({
 
   // 관리자 로그아웃
   function handleLogout() {
+    onAuthorizedChange?.(false);
     setAuthorized(false);
     setUsername("");
     setPassword("");
@@ -219,6 +226,14 @@ export default function AdminDashboard({
     setError("");
     setMessage("로그아웃했습니다.");
   }
+
+  // Logout may also be initiated from the B2G header.
+  // Only react to a nonzero explicit signal, not the initial mount.
+  const lastLogoutSignal = useRef(logoutSignal);
+  useEffect(() => {
+    if (logoutSignal > 0 && logoutSignal !== lastLogoutSignal.current) handleLogout();
+    lastLogoutSignal.current = logoutSignal;
+  }, [logoutSignal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 관리자 신고 새로고침
   async function handleRefresh() {

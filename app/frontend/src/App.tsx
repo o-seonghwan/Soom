@@ -17,7 +17,7 @@ export default function App() {
         <div className="w-full max-w-4xl">
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold text-green-800">
-              폐(Lung) 끼치지 마세요
+              숨구리당당
             </h1>
 
             <p className="mt-3 text-gray-600">
@@ -91,9 +91,11 @@ export default function App() {
       <button
         type="button"
         onClick={() => setServiceMode(null)}
-        className="absolute right-3 top-3 z-[1200] rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 shadow"
+        aria-label="서비스 다시 선택"
+        title="서비스 다시 선택"
+        className="absolute right-3 top-3 z-[1200] flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-xl font-bold text-gray-700 shadow hover:bg-gray-50"
       >
-        서비스 다시 선택
+        ×
       </button>
 
       {serviceMode === "b2c" ? (
