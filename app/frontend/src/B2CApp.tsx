@@ -610,7 +610,7 @@ export default function App() {
       {/* 기존 헤더 유지 */}
       <header className="z-[1000] bg-white px-5 py-4 shadow-sm">
         <h1 className="text-xl font-bold text-green-700">
-          폐(Lung) 끼치지 마세요
+          숨구리당당
         </h1>
 
         <p className="text-xs text-gray-500">
@@ -647,7 +647,7 @@ export default function App() {
         {showRisks &&
           !riskLoading &&
           !riskError && cleanlinessEdges.length > 0 && (
-            <div className="absolute bottom-14 left-3 z-[500] rounded-xl bg-white/95 p-3 text-xs shadow-lg">
+            <div className="absolute bottom-24 left-3 z-[500] rounded-xl bg-white/95 p-3 text-xs shadow-lg">
               <p className="font-bold text-slate-800">보행로 청정지수 · AI 모델</p>
               <p className="mt-1 text-gray-600">초록색이 진할수록 청정지수가 높음</p>
               <div className="mt-2 h-2 w-full rounded" style={{background: "linear-gradient(90deg, rgba(22,163,74,0.18), rgba(22,163,74,0.85))"}} />
@@ -657,13 +657,13 @@ export default function App() {
           )}
         <button type="button" onClick={() => setShowControls(value => !value)}
           aria-expanded={showControls}
-          className="absolute left-3 top-36 z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
+          className="absolute left-3 top-[124px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
           {showControls ? "설정 닫기 ×" : routes.length > 0 ? "경로 결과 · 회피 강도 ☰" : "회피 강도 · 제보 ☰"}
         </button>
 
       {/* 경로 설정과 제보 폼은 필요할 때만 열어서 지도를 가리지 않도록 함 */}
       {showControls && (
-      <section className="absolute left-3 top-48 z-[700] max-h-[min(56dvh,calc(100%-210px))] w-[min(390px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
+      <section className="absolute left-3 top-[172px] z-[700] max-h-[min(56dvh,calc(100%-190px))] w-[min(390px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
 
         {/* 회피 강도/결과를 별도 탭으로 구분 */}
         <div className="mb-4 grid grid-cols-4 gap-1">
