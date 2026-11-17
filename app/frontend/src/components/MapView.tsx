@@ -525,7 +525,7 @@ export default function MapView({
         </div>
       )}
 
-      <div className="absolute right-3 top-3 z-[650] flex items-start gap-2">
+      <div className={`absolute right-3 top-3 z-[650] flex items-start gap-2 ${audience === "b2c" ? "max-[760px]:top-[132px]" : ""}`}>
         {audience === "b2c" && avoidanceLevel !== undefined && onAvoidanceLevelChange && (
           <div className="w-[min(220px,calc(100vw-5.5rem))]">
             <RoutePanel avoidanceLevel={avoidanceLevel} onAvoidanceLevelChange={onAvoidanceLevelChange} />
