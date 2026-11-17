@@ -289,6 +289,7 @@ export default function MapView({
   return (
     <div className="relative h-full w-full">
       <MapContainer
+        className="lung-map"
         center={GANGNAM_CENTER}
         zoom={13}
         zoomControl={false}
@@ -303,7 +304,7 @@ export default function MapView({
           maxZoom={20}
         />
 
-        <ZoomControl position="bottomleft" />
+        <ZoomControl position="bottomright" />
 
         {/* 지도 입력 및 이동 */}
         <MapClickHandler onMapClick={onMapClick} />
@@ -541,20 +542,19 @@ export default function MapView({
           aria-pressed={showSmokingZones}
           className={`flex h-11 w-11 items-center justify-center rounded-full border bg-white text-lg shadow-lg ${showSmokingZones ? "border-amber-500 text-amber-700" : "border-slate-200 text-slate-700"}`}
           title={showSmokingZones ? "흡연구역 숨기기" : "흡연구역 표시"}>🚬</button>
+        {audience === "b2c" && onLocate && (
+          <button type="button" onClick={onLocate} aria-label="현재 위치로 지도 이동"
+            title="현재 위치로 지도 이동 (위치 권한 동의 필요)"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-xl text-sky-600 shadow-lg">
+            ◎
+          </button>
+        )}
         {showSmokingZones && smokingZonesMessage && (
           <p role="status" className="max-w-52 rounded-lg bg-white/95 p-2 text-xs text-slate-700 shadow">
             {smokingZonesMessage}
           </p>
         )}
       </div>
-
-      {audience === "b2c" && onLocate && (
-        <button type="button" onClick={onLocate} aria-label="현재 위치로 지도 이동"
-          title="현재 위치로 지도 이동 (위치 권한 동의 필요)"
-          className="absolute bottom-4 right-3 z-[650] flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-xl text-sky-600 shadow-lg">
-          ◎
-        </button>
-      )}
 
       {audience === "b2g" && showReports && (
         <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex flex-wrap gap-3 rounded-lg bg-white/95 px-3 py-2 text-xs shadow">
