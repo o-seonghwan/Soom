@@ -358,7 +358,7 @@ export default function MapView({
             style={{
               stroke: false,
               fillColor: "#64748b",
-              fillOpacity: 0.6,
+              fillOpacity: 0.3,
               fillRule: "evenodd",
             }}
           />
