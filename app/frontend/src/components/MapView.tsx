@@ -569,12 +569,14 @@ export default function MapView({
           className={`flex h-11 w-11 items-center justify-center rounded-full border bg-white text-xl shadow-lg ${showRisks ? "border-green-500 text-green-700" : "border-slate-200 text-slate-500"}`}>
           🌿
         </button>
-        <button type="button" onClick={onToggleReports}
-          aria-label={showReports ? "제보 숨기기" : "제보 표시"} aria-pressed={showReports}
-          title="제보 표시 전환"
-          className={`flex h-11 w-11 items-center justify-center rounded-full border bg-white text-xl shadow-lg ${showReports ? "border-purple-500 text-purple-700" : "border-slate-200 text-slate-500"}`}>
-          📍
-        </button>
+        {audience === "b2g" && (
+          <button type="button" onClick={onToggleReports}
+            aria-label={showReports ? "제보 숨기기" : "제보 표시"} aria-pressed={showReports}
+            title="제보 표시 전환"
+            className={`flex h-11 w-11 items-center justify-center rounded-full border bg-white text-xl shadow-lg ${showReports ? "border-purple-500 text-purple-700" : "border-slate-200 text-slate-500"}`}>
+            📍
+          </button>
+        )}
         <button type="button" onClick={() => setShowSmokingZones(value => !value)}
           aria-label={showSmokingZones ? "흡연구역 숨기기" : "흡연구역 표시"}
           aria-pressed={showSmokingZones}
