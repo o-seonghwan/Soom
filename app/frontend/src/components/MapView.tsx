@@ -575,7 +575,7 @@ export default function MapView({
             aria-label={showReports ? "제보 숨기기" : "제보 표시"} aria-pressed={showReports}
             title="제보 표시 전환"
             className="flex h-11 w-11 items-center justify-center rounded-full border-0 bg-white shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900">
-            <img src={showReports ? "/icons/user-report.png" : "/icons/user-report-off.png"} alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
+            <img src={showReports ? "/icons/user-report.svg" : "/icons/user-report-off.svg"} alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
           </button>
         )}
         <button type="button" onClick={() => setShowSmokingZones(value => !value)}
@@ -583,7 +583,7 @@ export default function MapView({
           aria-pressed={showSmokingZones}
           className="flex h-11 w-11 items-center justify-center rounded-full border-0 bg-white shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
           title={showSmokingZones ? "흡연구역 숨기기" : "흡연구역 표시"}>
-          <img src={showSmokingZones ? "/icons/smoking-zone-on.png" : "/icons/smoking-zone.png"} alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
+          <img src={showSmokingZones ? "/icons/smoking-zone-on.svg" : "/icons/smoking-zone.svg"} alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
         </button>
         {audience === "b2c" && onLocate && (
           <button type="button" onClick={onLocate} aria-label="현재 위치로 지도 이동"
