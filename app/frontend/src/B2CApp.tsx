@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import MapView from "./components/MapView";
 import ReportForm from "./components/ReportForm";
-import RoutePanel from "./components/RoutePanel";
 import RouteResultPanel from "./components/RouteResultPanel";
 import { lookupAddress } from "./services/addressService";
 
@@ -29,7 +28,7 @@ import {
 } from "./services/reportService";
 
 
-type PageMode = "route" | "shortest" | "safest" | "report";
+type PageMode = "shortest" | "safest" | "report";
 type LocationMode = "start" | "end";
 type SearchStatus = "idle" | "success" | "error";
 
@@ -91,7 +90,7 @@ export default function App() {
   // ---------------------------------------
 
   const [pageMode, setPageMode] =
-    useState<PageMode>("route");
+    useState<PageMode>("shortest");
 
   const [showControls, setShowControls] = useState(false);
 
@@ -646,12 +645,9 @@ export default function App() {
     setReportLocation(null);
     setReportNotice(null);
 
-    if (mode === "route") {
-      setSelectionMode(start ? "end" : "start");
-    }
 
     // 공개 목록은 관리자 검토 후 또는 화면 전환 시 갱신
-    if (mode === "route" || mode === "report") {
+    if (mode === "shortest" || mode === "report") {
       void refreshPublicReports();
     }
   }
@@ -732,6 +728,8 @@ export default function App() {
           reports={reports}
           showRisks={showRisks}
           showReports={showReports}
+          avoidanceLevel={avoidanceLevel}
+          onAvoidanceLevelChange={handleAvoidanceLevelChange}
           onToggleCleanliness={() => setShowRisks(value => !value)}
           onToggleReports={() => setShowReports(value => !value)}
           reportLocation={reportLocation}
@@ -762,17 +760,16 @@ export default function App() {
         <button type="button" onClick={() => setShowControls(value => !value)}
           aria-expanded={showControls}
           className="absolute left-3 top-[124px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
-          {showControls ? "설정 닫기 ×" : routes.length > 0 ? "경로 결과 · 회피 강도 ☰" : "회피 강도 · 제보 ☰"}
+          {showControls ? "패널 닫기 ×" : "경로 결과 · 제보 ☰"}
         </button>
 
       {/* 경로 설정과 제보 폼은 필요할 때만 열어서 지도를 가리지 않도록 함 */}
       {showControls && (
       <section className="absolute left-3 top-[172px] z-[700] max-h-[min(56dvh,calc(100%-190px))] w-[min(390px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
 
-        {/* 회피 강도/결과를 별도 탭으로 구분 */}
-        <div className="mb-4 grid grid-cols-4 gap-1">
+        {/* 최단/회피 경로 결과와 흡연 제보 탭 */}
+        <div className="mb-4 grid grid-cols-3 gap-1">
           {([
-            ["route", "회피 강도"],
             ["shortest", "최단 경로"],
             ["safest", "회피 경로"],
             ["report", "흡연 제보"],
@@ -783,11 +780,6 @@ export default function App() {
             </button>
           ))}
         </div>
-
-        {pageMode === "route" && (
-          <RoutePanel avoidanceLevel={avoidanceLevel} loading={loading}
-            onAvoidanceLevelChange={handleAvoidanceLevelChange} />
-        )}
 
         {pageMode === "shortest" && (
           <RouteResultPanel type="shortest" route={routes.find(route => route.id === "shortest")} />
@@ -839,7 +831,7 @@ export default function App() {
               onSelectLocation={() => {
                 setReportNotice(null);
               }}
-              onCancel={() => changePage("route")}
+              onCancel={() => changePage("shortest")}
             />
 
             {reportNotice && (
