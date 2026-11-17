@@ -24,6 +24,8 @@ import { getCleanColor } from "../utils/cleanColor";
 import type { CleanEdgeFeature } from "../types/cleanliness";
 import B2CCleanRoads from "./B2CCleanRoads";
 import MapRouteCard from "./MapRouteCard";
+import RoutePanel from "./RoutePanel";
+import type { RouteRequest } from "../types/route";
 import { deduplicateCleanEdges } from "../utils/deduplicateCleanEdges";
 import "leaflet/dist/leaflet.css";
 
@@ -43,6 +45,8 @@ interface MapViewProps {
   reports: Report[];
   showRisks: boolean;
   showReports: boolean;
+  avoidanceLevel?: RouteRequest["avoidanceLevel"];
+  onAvoidanceLevelChange?: (value: RouteRequest["avoidanceLevel"]) => void;
   onToggleCleanliness?: () => void;
   onToggleReports?: () => void;
   reportLocation: Coordinate | null;
@@ -207,6 +211,8 @@ export default function MapView({
   reports,
   showRisks,
   showReports,
+  avoidanceLevel,
+  onAvoidanceLevelChange,
   onToggleCleanliness,
   onToggleReports,
   reportLocation,
@@ -519,7 +525,13 @@ export default function MapView({
         </div>
       )}
 
-      <div className="absolute right-3 top-3 z-[650] flex flex-col items-end gap-2">
+      <div className="absolute right-3 top-3 z-[650] flex items-start gap-2">
+        {audience === "b2c" && avoidanceLevel !== undefined && onAvoidanceLevelChange && (
+          <div className="w-[min(220px,calc(100vw-5.5rem))]">
+            <RoutePanel avoidanceLevel={avoidanceLevel} onAvoidanceLevelChange={onAvoidanceLevelChange} />
+          </div>
+        )}
+        <div className="flex flex-col items-end gap-2">
         <button type="button" onClick={onToggleCleanliness}
           aria-label={showRisks ? "보행로 청정지수 숨기기" : "보행로 청정지수 표시"}
           aria-pressed={showRisks} title="보행로 청정지수 표시 전환"
@@ -549,6 +561,7 @@ export default function MapView({
             {smokingZonesMessage}
           </p>
         )}
+        </div>
       </div>
 
       {audience === "b2g" && showReports && (
