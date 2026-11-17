@@ -30,11 +30,10 @@ import type { RouteRequest } from "../types/route";
 import { deduplicateCleanEdges } from "../utils/deduplicateCleanEdges";
 import "leaflet/dist/leaflet.css";
 
-// Smoking-area positions use the same cigarette pictogram as the layer toggle.
-// Inline DivIcon avoids external icon asset paths and stays legible at any map zoom.
-const smokingZoneIcon = L.divIcon({
-  className: "lung-smoking-zone-icon",
-  html: '<span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:2px solid #92400e;border-radius:50%;background:#fff7ed;box-shadow:0 2px 7px rgba(0,0,0,.25);font-size:19px;line-height:1">🚬</span>',
+// Use the existing transparent smoking-zone PNG directly on the map.
+// No enclosing circle, border, or background is added to the marker.
+const smokingZoneIcon = L.icon({
+  iconUrl: "/icons/smoking-zone.png",
   iconSize: [32, 32],
   iconAnchor: [16, 16],
   popupAnchor: [0, -17],
@@ -588,7 +587,7 @@ export default function MapView({
         {audience === "b2c" && onLocate && (
           <button type="button" onClick={onLocate} aria-label="현재 위치로 지도 이동"
             title={currentLocation ? "현재 위치로 지도 이동 (위치 확인됨)" : "현재 위치로 지도 이동 (위치 권한 동의 필요)"}
-            className={`flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 ${currentLocation ? "border-black" : "border-slate-200"}`}>
+            className={`flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 border-[#1C2631]`}>
             <img src="/icons/current-location.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
           </button>
         )}
