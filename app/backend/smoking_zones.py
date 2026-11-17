@@ -21,6 +21,9 @@ def load_smoking_zones():
         if not lat_col or not lng_col or not name_col:
             raise ValueError("흡연구역 CSV에는 name/시설명, lat/위도, lng/경도 열이 필요합니다.")
         zones = []
+        accuracy_col = "locationAccuracy" if "locationAccuracy" in fields else None
+        address_col = "address" if "address" in fields else None
+        source_col = "source" if "source" in fields else None
         for line, entry in enumerate(reader, 2):
             name = (entry[name_col] or "").strip()
             try:
@@ -30,5 +33,13 @@ def load_smoking_zones():
                 raise ValueError(f"흡연구역 CSV {line}행 좌표가 올바르지 않습니다.") from exc
             if not name or not all(map(math.isfinite, (lat, lng))) or not (37 <= lat <= 38 and 126 <= lng <= 128):
                 raise ValueError(f"흡연구역 CSV {line}행 시설명 또는 서울권 좌표 확인 필요")
-            zones.append({"id": f"smoking-zone-{line}", "name": name, "lat": lat, "lng": lng})
+            accuracy = (entry.get(accuracy_col) or "").strip() if accuracy_col else "unspecified"
+            if accuracy not in {"verified", "address-level", "unspecified"}:
+                raise ValueError(f"흡연구역 CSV {line}행 위치 정확도 값 확인 필요")
+            zones.append({
+                "id": f"smoking-zone-{line}", "name": name, "lat": lat, "lng": lng,
+                "locationAccuracy": accuracy,
+                "address": (entry.get(address_col) or "").strip() if address_col else "",
+                "source": (entry.get(source_col) or "").strip() if source_col else "",
+            })
     return {"source": "configured-csv", "zones": zones}
