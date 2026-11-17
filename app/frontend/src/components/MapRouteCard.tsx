@@ -3,8 +3,8 @@ import type { Coordinate } from "../types/route";
 interface Props {
   start: Coordinate | null;
   end: Coordinate | null;
-  startAddress: string | null;
-  endAddress: string | null;
+  startAddress: string | null | undefined;
+  endAddress: string | null | undefined;
   selectionMode: "start" | "end";
   loading: boolean;
   onSelect: (mode: "start" | "end") => void;
@@ -12,9 +12,9 @@ interface Props {
   onSearch: () => void;
 }
 
-function label(point: Coordinate | null, address: string | null, fallback: string) {
+function label(point: Coordinate | null, address: string | null | undefined, fallback: string) {
   if (address) return address;
-  if (point) return `${point[0].toFixed(5)}, ${point[1].toFixed(5)} (주소 확인 불가)`;
+  if (point) return address === undefined ? "주소 확인 중…" : "주소 확인 불가";
   return fallback;
 }
 
