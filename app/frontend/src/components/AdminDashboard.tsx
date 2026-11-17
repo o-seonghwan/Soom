@@ -233,7 +233,7 @@ export default function AdminDashboard({
   useEffect(() => {
     if (logoutSignal > 0 && logoutSignal !== lastLogoutSignal.current) handleLogout();
     lastLogoutSignal.current = logoutSignal;
-  }, [logoutSignal]);
+  }, [logoutSignal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 관리자 신고 새로고침
   async function handleRefresh() {
