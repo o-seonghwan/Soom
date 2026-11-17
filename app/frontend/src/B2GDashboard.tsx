@@ -230,14 +230,15 @@ export default function B2GDashboard() {
             <p className="mt-2 max-w-72 text-[10px] text-gray-600">높을수록 상대적으로 청정 · 비표시 구간은 데이터 없음 · 실측 대기질이 아님</p>
           </div>
         )}
+        {/* Independent collapsible B2G analysis dashboard */}
+              <button type="button" onClick={() => setShowDashboard(value => !value)}
+                aria-expanded={showDashboard}
+                className="absolute top-3 left-3 z-[1050] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-bold text-slate-700 shadow-lg">
+                {showDashboard ? "지자체 분석 대시보드 닫기 ×" : "지자체 분석 대시보드 ☰"}
+              </button>
+        
       </main>
 
-      {/* Independent collapsible B2G analysis dashboard */}
-      <button type="button" onClick={() => setShowDashboard(value => !value)}
-        aria-expanded={showDashboard}
-        className="absolute top-3 left-3 z-[1050] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-bold text-slate-700 shadow-lg">
-        {showDashboard ? "지자체 분석 대시보드 닫기 ×" : "지자체 분석 대시보드 ☰"}
-      </button>
       {showDashboard && (
       <section className="z-[1000] max-h-[55dvh] space-y-4 overflow-y-auto bg-white p-4 pb-16 shadow-lg">
         <div>
