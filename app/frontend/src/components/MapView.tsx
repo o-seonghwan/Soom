@@ -24,6 +24,8 @@ import { getCleanColor } from "../utils/cleanColor";
 import type { CleanEdgeFeature } from "../types/cleanliness";
 import B2CCleanRoads from "./B2CCleanRoads";
 import MapRouteCard from "./MapRouteCard";
+import RoutePanel from "./RoutePanel";
+import type { RouteRequest } from "../types/route";
 import { deduplicateCleanEdges } from "../utils/deduplicateCleanEdges";
 import "leaflet/dist/leaflet.css";
 
@@ -38,11 +40,14 @@ interface MapViewProps {
   start: Coordinate | null;
   end: Coordinate | null;
   routes: Route[];
+  fitBoundsRoutes?: Route[];
   risks: RiskLocation[];
   cleanlinessEdges?: CleanEdgeFeature[];
   reports: Report[];
   showRisks: boolean;
   showReports: boolean;
+  avoidanceLevel?: RouteRequest["avoidanceLevel"];
+  onAvoidanceLevelChange?: (value: RouteRequest["avoidanceLevel"]) => void;
   onToggleCleanliness?: () => void;
   onToggleReports?: () => void;
   reportLocation: Coordinate | null;
@@ -55,6 +60,7 @@ interface MapViewProps {
   onSelectLocation?: (mode: "start" | "end") => void;
   onSwapLocations?: () => void;
   onLocate?: () => void;
+  currentLocation?: Coordinate | null;
   onMapClick: (point: Coordinate) => void;
 }
 
@@ -201,11 +207,14 @@ export default function MapView({
   start,
   end,
   routes,
+  fitBoundsRoutes = routes,
   risks,
   cleanlinessEdges,
   reports,
   showRisks,
   showReports,
+  avoidanceLevel,
+  onAvoidanceLevelChange,
   onToggleCleanliness,
   onToggleReports,
   reportLocation,
@@ -218,6 +227,7 @@ export default function MapView({
   onSelectLocation,
   onSwapLocations,
   onLocate,
+  currentLocation = null,
   onMapClick,
 }: MapViewProps) {
   // 실제 강남구 경계 GeoJSON
@@ -309,7 +319,7 @@ export default function MapView({
         {/* 지도 입력 및 이동 */}
         <MapClickHandler onMapClick={onMapClick} />
         <MapFocus point={focusPoint} />
-        <FitRoutes routes={routes} />
+        <FitRoutes routes={fitBoundsRoutes} />
 
         {/* 강남구 전체가 보이도록 초기 조정 */}
         <BoundaryFocus boundary={boundary} />
@@ -378,38 +388,6 @@ export default function MapView({
             </Circle>
           ))}
 
-        {/* 출발지 */}
-        {start && (
-          <CircleMarker
-            center={start}
-            radius={9}
-            bubblingMouseEvents={false}
-            pathOptions={{
-              color: "#15803d",
-              fillColor: "#22c55e",
-              fillOpacity: 1,
-            }}
-          >
-            <Popup>출발지</Popup>
-          </CircleMarker>
-        )}
-
-        {/* 목적지 */}
-        {end && (
-          <CircleMarker
-            center={end}
-            radius={9}
-            bubblingMouseEvents={false}
-            pathOptions={{
-              color: "#b91c1c",
-              fillColor: "#ef4444",
-              fillOpacity: 1,
-            }}
-          >
-            <Popup>목적지</Popup>
-          </CircleMarker>
-        )}
-
         {/* A* 경로 */}
         {routes.map((route) => (
           <Polyline
@@ -433,6 +411,31 @@ export default function MapView({
             </Popup>
           </Polyline>
         ))}
+
+        {/* Match the exact outline colors and white centers in the route entry card. */}
+        {start && (
+          <CircleMarker center={start} radius={audience === "b2c" ? 4.5 : 9} bubblingMouseEvents={false}
+            pathOptions={audience === "b2c"
+              ? { color: "#3b82f6", weight: 3, fillColor: "#ffffff", fillOpacity: 1 }
+              : { color: "#15803d", weight: 3, fillColor: "#22c55e", fillOpacity: 1 }}>
+            <Popup>출발지</Popup>
+          </CircleMarker>
+        )}
+        {end && (
+          <CircleMarker center={end} radius={audience === "b2c" ? 4.5 : 9} bubblingMouseEvents={false}
+            pathOptions={audience === "b2c"
+              ? { color: "#72EFDD", weight: 3, fillColor: "#ffffff", fillOpacity: 1 }
+              : { color: "#b91c1c", weight: 3, fillColor: "#ef4444", fillOpacity: 1 }}>
+            <Popup>목적지</Popup>
+          </CircleMarker>
+        )}
+        {audience === "b2c" && currentLocation && (
+          <CircleMarker center={currentLocation} radius={4} bubblingMouseEvents={false}
+            pathOptions={{ color: "#ffffff", weight: 1, fillColor: "#111111", fillOpacity: 1 }}
+          >
+            <Popup>현재 위치</Popup>
+          </CircleMarker>
+        )}
 
         {/* Publicly documented smoking facilities only (no no-smoking data). */}
         {showSmokingZones && smokingZones.map(zone => (
@@ -524,7 +527,13 @@ export default function MapView({
         </div>
       )}
 
-      <div className="absolute right-3 top-3 z-[650] flex flex-col items-end gap-2">
+      <div className={`absolute right-3 top-3 z-[650] flex items-start gap-2 ${audience === "b2c" ? "max-[760px]:top-[132px]" : ""}`}>
+        {audience === "b2c" && avoidanceLevel !== undefined && onAvoidanceLevelChange && (
+          <div className="w-[min(220px,calc(100vw-5.5rem))]">
+            <RoutePanel avoidanceLevel={avoidanceLevel} onAvoidanceLevelChange={onAvoidanceLevelChange} />
+          </div>
+        )}
+        <div className="flex flex-col items-end gap-2">
         <button type="button" onClick={onToggleCleanliness}
           aria-label={showRisks ? "보행로 청정지수 숨기기" : "보행로 청정지수 표시"}
           aria-pressed={showRisks} title="보행로 청정지수 표시 전환"
@@ -554,6 +563,7 @@ export default function MapView({
             {smokingZonesMessage}
           </p>
         )}
+        </div>
       </div>
 
       {audience === "b2g" && showReports && (

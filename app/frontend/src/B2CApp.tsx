@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import MapView from "./components/MapView";
 import ReportForm from "./components/ReportForm";
-import RoutePanel from "./components/RoutePanel";
 import RouteResultPanel from "./components/RouteResultPanel";
 import { lookupAddress } from "./services/addressService";
 
@@ -29,7 +28,7 @@ import {
 } from "./services/reportService";
 
 
-type PageMode = "route" | "shortest" | "safest" | "report";
+type PageMode = "shortest" | "safest" | "report";
 type LocationMode = "start" | "end";
 type SearchStatus = "idle" | "success" | "error";
 
@@ -91,7 +90,7 @@ export default function App() {
   // ---------------------------------------
 
   const [pageMode, setPageMode] =
-    useState<PageMode>("route");
+    useState<PageMode>("shortest");
 
   const [showControls, setShowControls] = useState(false);
 
@@ -100,6 +99,73 @@ export default function App() {
 
   const [focusPoint, setFocusPoint] =
     useState<Coordinate | null>(null);
+
+  // Location consent is requested only when entering B2C. Tracking never moves
+  // the map automatically; only a deliberate locate-button click does.
+  const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
+  const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(false);
+  const locationConsentRef = useRef<boolean | null>(null);
+  const focusOnNextLocationRef = useRef(false);
+
+  useEffect(() => {
+    if (locationConsentRef.current !== null) return;
+    if (!navigator.geolocation) {
+      locationConsentRef.current = false;
+      return;
+    }
+    const agreed = window.confirm(
+      "숨구리당당에서 내 위치를 지도에 표시하기 위해 위치 정보 사용에 동의하시겠습니까? 동의하면 B2C 이용 중 위치가 갱신되며, 지도는 현재 위치 버튼을 누를 때만 이동합니다."
+    );
+    locationConsentRef.current = agreed;
+    setLocationTrackingEnabled(agreed);
+  }, []);
+
+  useEffect(() => {
+    if (!locationTrackingEnabled || !navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      position => {
+        const point: Coordinate = [position.coords.latitude, position.coords.longitude];
+        setCurrentLocation(point);
+        if (focusOnNextLocationRef.current) {
+          focusOnNextLocationRef.current = false;
+          setFocusPoint([...point]);
+        }
+      },
+      error => {
+        console.warn("현재 위치 추적 오류:", error);
+        if (error.code === 1) {
+          setLocationTrackingEnabled(false);
+          setCurrentLocation(null);
+          focusOnNextLocationRef.current = false;
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [locationTrackingEnabled]);
+
+  function focusCurrentLocation() {
+    if (!navigator.geolocation) {
+      window.alert("현재 위치 기능을 지원하지 않습니다.");
+      return;
+    }
+    if (currentLocation) {
+      setFocusPoint([...currentLocation]);
+      return;
+    }
+    // A declined entry consent can be enabled by explicitly tapping locate.
+    if (!locationTrackingEnabled) {
+      const agreed = window.confirm(
+        "내 위치 표시를 활성화하시겠습니까? 동의하면 B2C 이용 중 위치가 계속 갱신됩니다."
+      );
+      if (!agreed) return;
+      locationConsentRef.current = true;
+      setLocationTrackingEnabled(true);
+    }
+    focusOnNextLocationRef.current = true;
+  }
 
   // ---------------------------------------
   // 경로 입력 상태
@@ -142,7 +208,7 @@ export default function App() {
   }, [end]);
 
   const [avoidanceLevel, setAvoidanceLevel] =
-    useState<RouteRequest["avoidanceLevel"]>("medium");
+    useState<RouteRequest["avoidanceLevel"]>(50);
 
   // ---------------------------------------
   // 경로 탐색 상태
@@ -150,6 +216,10 @@ export default function App() {
 
   const [routes, setRoutes] =
     useState<Route[]>([]);
+
+  // Only explicit route searches should zoom/pan to route bounds.
+  // Slider-driven recalculation updates the lines without changing the viewport.
+  const [fitBoundsRoutes, setFitBoundsRoutes] = useState<Route[]>([]);
 
   const [loading, setLoading] = useState(false);
 
@@ -163,6 +233,17 @@ export default function App() {
     useRef<number | null>(null);
 
   const searchInProgress = useRef(false);
+  const routeRequestController = useRef<AbortController | null>(null);
+  const routeRequestSequence = useRef(0);
+  const avoidanceSearchTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (avoidanceSearchTimer.current !== null) window.clearTimeout(avoidanceSearchTimer.current);
+      routeRequestSequence.current += 1;
+      routeRequestController.current?.abort();
+    };
+  }, []);
 
   // ---------------------------------------
   // 위험도 데이터
@@ -316,6 +397,19 @@ export default function App() {
   // 6. 경로 결과 초기화
   // =======================================
 
+  function cancelPendingRouteSearch() {
+    if (avoidanceSearchTimer.current !== null) {
+      window.clearTimeout(avoidanceSearchTimer.current);
+      avoidanceSearchTimer.current = null;
+    }
+    routeRequestController.current?.abort();
+    routeRequestController.current = null;
+    routeRequestSequence.current += 1;
+    searchInProgress.current = false;
+    searchStartTime.current = null;
+    setLoading(false);
+  }
+
   function clearSearchResult() {
     setRoutes([]);
 
@@ -334,6 +428,7 @@ export default function App() {
     mode: LocationMode,
     point: Coordinate
   ) {
+    cancelPendingRouteSearch();
     if (mode === "start") {
       setStart(point);
       setStartLookup(null);
@@ -439,6 +534,7 @@ export default function App() {
 
   function swapLocations() {
     if (searchInProgress.current) return;
+    cancelPendingRouteSearch();
     setStart(end);
     setEnd(start);
     setStartLookup(endLookup);
@@ -455,15 +551,18 @@ export default function App() {
   // 11. A* 경로 탐색
   // =======================================
 
-  async function handleSearch() {
-    if (
-      !start ||
-      !end ||
-      searchInProgress.current
-    ) {
-      return;
-    }
+  async function handleSearch(level: RouteRequest["avoidanceLevel"] = avoidanceLevel, auto = false) {
+    if (!start || !end) return;
 
+    // A new slider setting supersedes any pending or in-flight route request.
+    if (avoidanceSearchTimer.current !== null) {
+      window.clearTimeout(avoidanceSearchTimer.current);
+      avoidanceSearchTimer.current = null;
+    }
+    routeRequestController.current?.abort();
+    const controller = new AbortController();
+    routeRequestController.current = controller;
+    const sequence = ++routeRequestSequence.current;
     searchInProgress.current = true;
     searchStartTime.current = performance.now();
 
@@ -473,42 +572,49 @@ export default function App() {
     setRoutes([]);
 
     try {
-      const result = await getRoutes({
-        start,
-        end,
-        avoidanceLevel,
-      });
+      const result = await getRoutes({ start, end, avoidanceLevel: level }, controller.signal);
+      if (controller.signal.aborted || sequence !== routeRequestSequence.current) return;
 
       setRoutes(result.routes);
       setSearchStatus("success");
-      // Collapse overlays so both complete route lines remain visible.
-      setShowControls(false);
-      setPageMode("shortest");
-    } catch (error) {
-      console.error("경로 탐색 오류:", error);
-
-      setSearchStatus("error");
-
-      window.alert(
-        error instanceof Error
-          ? error.message
-          : "경로 탐색에 실패했습니다."
-      );
-    } finally {
-      if (searchStartTime.current !== null) {
-        setElapsedSeconds(
-          (performance.now() -
-            searchStartTime.current) / 1000
-        );
+      if (!auto) {
+        setFitBoundsRoutes(result.routes);
+        // Manual searches keep the existing result-first experience.
+        setShowControls(false);
+        setPageMode("shortest");
       }
-
-      searchStartTime.current = null;
-      searchInProgress.current = false;
-
-      setLoading(false);
+    } catch (error) {
+      if (controller.signal.aborted || sequence !== routeRequestSequence.current) return;
+      console.error("경로 탐색 오류:", error);
+      setSearchStatus("error");
+      if (!auto) {
+        window.alert(error instanceof Error ? error.message : "경로 탐색에 실패했습니다.");
+      }
+    } finally {
+      if (sequence === routeRequestSequence.current) {
+        if (searchStartTime.current !== null) {
+          setElapsedSeconds((performance.now() - searchStartTime.current) / 1000);
+        }
+        searchStartTime.current = null;
+        searchInProgress.current = false;
+        routeRequestController.current = null;
+        setLoading(false);
+      }
     }
   }
 
+  function handleAvoidanceLevelChange(value: RouteRequest["avoidanceLevel"]) {
+    if (value === avoidanceLevel) return;
+    setAvoidanceLevel(value);
+    if (!start || !end) {
+      clearSearchResult();
+      return;
+    }
+
+    // Called only after drag release (or a completed keyboard action).
+    // handleSearch aborts the older request and accepts only the latest result.
+    void handleSearch(value, true);
+  }
 
   // =======================================
   // 12. 경로 초기화
@@ -518,6 +624,7 @@ export default function App() {
     if (searchInProgress.current) {
       return;
     }
+    cancelPendingRouteSearch();
 
     setStart(null);
     setEnd(null);
@@ -543,12 +650,9 @@ export default function App() {
     setReportLocation(null);
     setReportNotice(null);
 
-    if (mode === "route") {
-      setSelectionMode(start ? "end" : "start");
-    }
 
     // 공개 목록은 관리자 검토 후 또는 화면 전환 시 갱신
-    if (mode === "route" || mode === "report") {
+    if (mode === "shortest" || mode === "report") {
       void refreshPublicReports();
     }
   }
@@ -624,11 +728,14 @@ export default function App() {
           start={start}
           end={end}
           routes={routes}
+          fitBoundsRoutes={fitBoundsRoutes}
           risks={risks}
           cleanlinessEdges={cleanlinessEdges}
           reports={reports}
           showRisks={showRisks}
           showReports={showReports}
+          avoidanceLevel={avoidanceLevel}
+          onAvoidanceLevelChange={handleAvoidanceLevelChange}
           onToggleCleanliness={() => setShowRisks(value => !value)}
           onToggleReports={() => setShowReports(value => !value)}
           reportLocation={reportLocation}
@@ -640,7 +747,8 @@ export default function App() {
           onSearch={() => void handleSearch()}
           onSelectLocation={setSelectionMode}
           onSwapLocations={swapLocations}
-          onLocate={() => requestCurrentLocation("focus")}
+          onLocate={focusCurrentLocation}
+          currentLocation={currentLocation}
           onMapClick={handleMapClick}
         />
 
@@ -657,18 +765,17 @@ export default function App() {
           )}
         <button type="button" onClick={() => setShowControls(value => !value)}
           aria-expanded={showControls}
-          className="absolute left-3 top-[124px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
-          {showControls ? "설정 닫기 ×" : routes.length > 0 ? "경로 결과 · 회피 강도 ☰" : "회피 강도 · 제보 ☰"}
+          className="absolute left-3 top-[124px] max-[760px]:top-[224px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
+          {showControls ? "패널 닫기 ×" : "경로 결과 · 제보 ☰"}
         </button>
 
       {/* 경로 설정과 제보 폼은 필요할 때만 열어서 지도를 가리지 않도록 함 */}
       {showControls && (
-      <section className="absolute left-3 top-[172px] z-[700] max-h-[min(56dvh,calc(100%-190px))] w-[min(390px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
+      <section className="absolute left-3 top-[172px] max-[760px]:top-[272px] z-[700] max-h-[min(56dvh,calc(100%-190px))] w-[min(390px,calc(100%-24px))] max-[760px]:w-[min(390px,calc(100%-5.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
 
-        {/* 회피 강도/결과를 별도 탭으로 구분 */}
-        <div className="mb-4 grid grid-cols-4 gap-1">
+        {/* 최단/회피 경로 결과와 흡연 제보 탭 */}
+        <div className="mb-4 grid grid-cols-3 gap-1">
           {([
-            ["route", "회피 강도"],
             ["shortest", "최단 경로"],
             ["safest", "회피 경로"],
             ["report", "흡연 제보"],
@@ -679,11 +786,6 @@ export default function App() {
             </button>
           ))}
         </div>
-
-        {pageMode === "route" && (
-          <RoutePanel avoidanceLevel={avoidanceLevel} loading={loading}
-            onAvoidanceLevelChange={value => { setAvoidanceLevel(value); clearSearchResult(); }} />
-        )}
 
         {pageMode === "shortest" && (
           <RouteResultPanel type="shortest" route={routes.find(route => route.id === "shortest")} />
@@ -735,7 +837,7 @@ export default function App() {
               onSelectLocation={() => {
                 setReportNotice(null);
               }}
-              onCancel={() => changePage("route")}
+              onCancel={() => changePage("shortest")}
             />
 
             {reportNotice && (

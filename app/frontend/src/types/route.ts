@@ -5,7 +5,7 @@ export type Coordinate = [number, number];
 export interface RouteRequest {
   start: Coordinate;
   end: Coordinate;
-  avoidanceLevel: "low" | "medium" | "high";
+  avoidanceLevel: number; // Continuous 0–100 avoidance strength
 }
 
 // 경로 탐색 결과

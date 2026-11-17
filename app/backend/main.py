@@ -140,11 +140,8 @@ class RouteRequest(BaseModel):
         description="[위도, 경도]"
     )
 
-    avoidanceLevel: Literal[
-        "low",
-        "medium",
-        "high",
-    ] = "medium"
+    # Numeric 0..100 for continuous slider; legacy enum kept for compatibility.
+    avoidanceLevel: float | Literal["low", "medium", "high"] = Field(default=50, description="0~100 회피 강도")
 
 
 # =========================================
