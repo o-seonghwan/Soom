@@ -1,0 +1,25 @@
+
+@import "tailwindcss";
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Keep Leaflet zoom controls above the bottom-right attribution credits.
+   Scoped to both service maps; Leaflet attribution remains visible. */
+.lung-map .leaflet-bottom.leaflet-right .leaflet-control-zoom {
+  /* Attribution is roughly 18px high; leave ~12px between it and zoom buttons. */
+  margin-bottom: 30px;
+}

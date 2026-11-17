@@ -1,0 +1,114 @@
+
+from datetime import datetime, timezone
+import math
+import os
+
+from model_risk_adapter import load_model_risks
+from risk_decay import cleanliness_index
+
+
+# =====================================================
+# 1. Mock 위험도 데이터
+# =====================================================
+
+# 강남역 인근 테스트 위치
+# 실제 흡연 발생 위험도를 나타내지 않음
+MOCK_RISKS = [
+    {
+        "id": "risk-1",
+        "lat": 37.4985,
+        "lng": 127.0280,
+        "score": 90,
+        "radiusM": 35,
+    },
+    {
+        "id": "risk-2",
+        "lat": 37.4995,
+        "lng": 127.0300,
+        "score": 55,
+        "radiusM": 35,
+    },
+    {
+        "id": "risk-3",
+        "lat": 37.4965,
+        "lng": 127.0260,
+        "score": 15,
+        "radiusM": 35,
+    },
+]
+
+
+# =====================================================
+# 2. 위험도 데이터 검증
+# =====================================================
+
+def validate_risk(risk):
+    """
+    위험도 데이터를 내부 표준 형식으로 변환한다.
+
+    score: 0~100
+    radiusM: 미터 단위
+    """
+
+    score = float(risk["score"])
+    radius = float(risk["radiusM"])
+    lat = float(risk["lat"])
+    lng = float(risk["lng"])
+
+    if not math.isfinite(score) or not 0 <= score <= 100:
+        raise ValueError(
+            "위험점수는 0~100 사이여야 합니다."
+        )
+
+    if not math.isfinite(radius) or radius <= 0:
+        raise ValueError(
+            "위험 반경은 0보다 커야 합니다."
+        )
+
+    if not math.isfinite(lat) or not (-90 <= lat <= 90):
+        raise ValueError("위도 범위가 잘못되었습니다.")
+
+    if not math.isfinite(lng) or not (-180 <= lng <= 180):
+        raise ValueError("경도 범위가 잘못되었습니다.")
+
+    return {
+        "id": str(risk["id"]),
+        "lat": lat,
+        "lng": lng,
+        "score": score,
+        "radiusM": radius,
+        "cleanIndex": cleanliness_index(score),
+        **({"decayProfile": risk["decayProfile"]} if "decayProfile" in risk else {}),
+    }
+
+
+# =====================================================
+# 3. 위험도 데이터 공급자
+# =====================================================
+
+def get_risk_snapshot():
+    """
+    현재 사용할 위험도 데이터 묶음 반환.
+
+    11단계: Mock 데이터
+    추후: AI 모델 예측 결과 또는 DB 조회
+    """
+
+    csv_path = os.environ.get("LUNG_RISK_CSV", "").strip()
+    if csv_path:
+        locations = [validate_risk(r) for r in load_model_risks(csv_path)]
+        source = "model-csv"
+        version = "model-distance-bands-v1"
+    else:
+        locations = [validate_risk(r) for r in MOCK_RISKS]
+        source = "mock"
+        version = "mock-v1"
+
+    return {
+        "source": source,
+        "version": version,
+        "generatedAt": datetime.now(
+            timezone.utc
+        ).isoformat(),
+        "locations": locations,
+    }

@@ -1,0 +1,12 @@
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local test output
+.pytest_cache/
