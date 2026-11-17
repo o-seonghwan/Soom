@@ -18,12 +18,14 @@ const API_BASE_URL =
 // =====================================================
 
 export async function getRoutes(
-  request: RouteRequest
+  request: RouteRequest,
+  signal?: AbortSignal
 ): Promise<RouteResponse> {
   const response = await fetch(
     `${API_BASE_URL}/api/routes`,
     {
       method: "POST",
+      signal,
       headers: {
         "Content-Type": "application/json",
       },
