@@ -217,6 +217,10 @@ export default function App() {
   const [routes, setRoutes] =
     useState<Route[]>([]);
 
+  // Only explicit route searches should zoom/pan to route bounds.
+  // Slider-driven recalculation updates the lines without changing the viewport.
+  const [fitBoundsRoutes, setFitBoundsRoutes] = useState<Route[]>([]);
+
   const [loading, setLoading] = useState(false);
 
   const [searchStatus, setSearchStatus] =
@@ -574,6 +578,7 @@ export default function App() {
       setRoutes(result.routes);
       setSearchStatus("success");
       if (!auto) {
+        setFitBoundsRoutes(result.routes);
         // Manual searches keep the existing result-first experience.
         setShowControls(false);
         setPageMode("shortest");
@@ -723,6 +728,7 @@ export default function App() {
           start={start}
           end={end}
           routes={routes}
+          fitBoundsRoutes={fitBoundsRoutes}
           risks={risks}
           cleanlinessEdges={cleanlinessEdges}
           reports={reports}
