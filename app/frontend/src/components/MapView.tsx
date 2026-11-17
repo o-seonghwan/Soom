@@ -406,7 +406,7 @@ export default function MapView({
 
         {/* Match the exact outline colors and white centers in the route entry card. */}
         {start && (
-          <CircleMarker center={start} radius={6} bubblingMouseEvents={false}
+          <CircleMarker center={start} radius={audience === "b2c" ? 4.5 : 9} bubblingMouseEvents={false}
             pathOptions={audience === "b2c"
               ? { color: "#3b82f6", weight: 3, fillColor: "#ffffff", fillOpacity: 1 }
               : { color: "#15803d", weight: 3, fillColor: "#22c55e", fillOpacity: 1 }}>
@@ -414,7 +414,7 @@ export default function MapView({
           </CircleMarker>
         )}
         {end && (
-          <CircleMarker center={end} radius={6} bubblingMouseEvents={false}
+          <CircleMarker center={end} radius={audience === "b2c" ? 4.5 : 9} bubblingMouseEvents={false}
             pathOptions={audience === "b2c"
               ? { color: "#72EFDD", weight: 3, fillColor: "#ffffff", fillOpacity: 1 }
               : { color: "#b91c1c", weight: 3, fillColor: "#ef4444", fillOpacity: 1 }}>
