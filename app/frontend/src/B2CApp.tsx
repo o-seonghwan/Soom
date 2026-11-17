@@ -647,7 +647,7 @@ export default function App() {
         {showRisks &&
           !riskLoading &&
           !riskError && cleanlinessEdges.length > 0 && (
-            <div className="absolute bottom-24 left-3 z-[500] rounded-xl bg-white/95 p-3 text-xs shadow-lg">
+            <div className="absolute bottom-14 left-3 z-[500] rounded-xl bg-white/95 p-3 text-xs shadow-lg">
               <p className="font-bold text-slate-800">보행로 청정지수 · AI 모델</p>
               <p className="mt-1 text-gray-600">초록색이 진할수록 청정지수가 높음</p>
               <div className="mt-2 h-2 w-full rounded" style={{background: "linear-gradient(90deg, rgba(22,163,74,0.18), rgba(22,163,74,0.85))"}} />
