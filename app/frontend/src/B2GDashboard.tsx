@@ -144,7 +144,7 @@ export default function B2GDashboard() {
       {/* B2G 헤더 */}
       <header className="z-[1000] bg-white px-5 py-4 shadow-sm">
         <h1 className="pr-44 text-xl font-bold text-slate-800">
-          폐(Lung) 끼치지 마세요
+          숨구리당당
         </h1>
 
         <p className="mt-1 text-xs text-gray-500">
@@ -153,11 +153,11 @@ export default function B2GDashboard() {
       </header>
 
       {/* Header admin control: left of the existing service selector in App.tsx. */}
-      <div className="absolute right-40 top-3 z-[1201] flex items-center gap-2">
+      <div className="absolute right-[4.25rem] top-3 z-[1201] flex items-center gap-2">
         {adminAuthorized && (
           <button type="button" onClick={() => setShowAdminPanel(value => !value)}
             aria-expanded={showAdminPanel}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow">
+            className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow">
             관리자 관리
           </button>
         )}
@@ -235,7 +235,7 @@ export default function B2GDashboard() {
       {/* Independent collapsible B2G analysis dashboard */}
       <button type="button" onClick={() => setShowDashboard(value => !value)}
         aria-expanded={showDashboard}
-        className="absolute bottom-4 left-3 z-[1050] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-bold text-slate-700 shadow-lg">
+        className="absolute top-3 left-3 z-[1050] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-bold text-slate-700 shadow-lg">
         {showDashboard ? "지자체 분석 대시보드 닫기 ×" : "지자체 분석 대시보드 ☰"}
       </button>
       {showDashboard && (
