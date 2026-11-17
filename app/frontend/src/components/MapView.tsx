@@ -566,27 +566,30 @@ export default function MapView({
         <button type="button" onClick={onToggleCleanliness}
           aria-label={showRisks ? "보행로 청정지수 숨기기" : "보행로 청정지수 표시"}
           aria-pressed={showRisks} title="보행로 청정지수 표시 전환"
-          className={`flex h-11 w-11 items-center justify-center rounded-full border bg-white text-xl shadow-lg ${showRisks ? "border-green-500 text-green-700" : "border-slate-200 text-slate-500"}`}>
-          🌿
+          className={`flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 ${showRisks ? "border-black" : "border-slate-200"}`}>
+          <img src={showRisks ? "/icons/cleanliness-on.png" : "/icons/cleanliness-off.png"}
+            alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
         </button>
         {audience === "b2g" && (
           <button type="button" onClick={onToggleReports}
             aria-label={showReports ? "제보 숨기기" : "제보 표시"} aria-pressed={showReports}
             title="제보 표시 전환"
-            className={`flex h-11 w-11 items-center justify-center rounded-full border bg-white text-xl shadow-lg ${showReports ? "border-purple-500 text-purple-700" : "border-slate-200 text-slate-500"}`}>
-            📍
+            className={`flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 ${showReports ? "border-black" : "border-slate-200"}`}>
+            <img src="/icons/user-report.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
           </button>
         )}
         <button type="button" onClick={() => setShowSmokingZones(value => !value)}
           aria-label={showSmokingZones ? "흡연구역 숨기기" : "흡연구역 표시"}
           aria-pressed={showSmokingZones}
-          className={`flex h-11 w-11 items-center justify-center rounded-full border bg-white text-lg shadow-lg ${showSmokingZones ? "border-amber-500 text-amber-700" : "border-slate-200 text-slate-700"}`}
-          title={showSmokingZones ? "흡연구역 숨기기" : "흡연구역 표시"}>🚬</button>
+          className={`flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 ${showSmokingZones ? "border-black" : "border-slate-200"}`}
+          title={showSmokingZones ? "흡연구역 숨기기" : "흡연구역 표시"}>
+          <img src="/icons/smoking-zone.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
+        </button>
         {audience === "b2c" && onLocate && (
           <button type="button" onClick={onLocate} aria-label="현재 위치로 지도 이동"
-            title="현재 위치로 지도 이동 (위치 권한 동의 필요)"
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-xl text-sky-600 shadow-lg">
-            ◎
+            title={currentLocation ? "현재 위치로 지도 이동 (위치 확인됨)" : "현재 위치로 지도 이동 (위치 권한 동의 필요)"}
+            className={`flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 ${currentLocation ? "border-black" : "border-slate-200"}`}>
+            <img src="/icons/current-location.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
           </button>
         )}
         {showSmokingZones && smokingZonesMessage && (
