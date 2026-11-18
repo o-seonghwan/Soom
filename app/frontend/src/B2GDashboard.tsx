@@ -227,7 +227,11 @@ export default function B2GDashboard() {
                 </div>
               ))}
             </div>
-            <p className="mt-2 max-w-72 text-[10px] text-gray-600">높을수록 상대적으로 청정 · 비표시 구간은 데이터 없음 · 실측 대기질이 아님</p>
+            <div className="mt-2 flex items-center gap-1.5 text-[10px] text-gray-600">
+              <span className="h-3 w-8 rounded bg-[#64748b] opacity-40" aria-hidden="true" />
+              <span>회색: 모델 점수 없음</span>
+            </div>
+            <p className="mt-2 max-w-72 text-[10px] text-gray-600">높을수록 상대적으로 청정 · 회색은 안전 판정이 아닌 미측정 구간 · 실측 대기질이 아님</p>
           </div>
         )}
         {/* Independent collapsible B2G analysis dashboard */}
