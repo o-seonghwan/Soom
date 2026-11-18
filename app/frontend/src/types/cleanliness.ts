@@ -3,8 +3,8 @@ export interface CleanEdgeFeature {
   geometry: { type: "LineString"; coordinates: [number, number][] };
   properties: {
     edgeId: string;
-    score: number;
-    cleanIndex: number;
+    score: number | null;
+    cleanIndex: number | null;
   };
 }
 
