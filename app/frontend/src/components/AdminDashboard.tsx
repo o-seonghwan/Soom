@@ -1,5 +1,6 @@
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import type { Coordinate } from "../types/route";
 import type { RiskLocation } from "../types/risk";
@@ -27,6 +28,9 @@ interface AdminDashboardProps {
     reports: Report[] | null
   ) => void;
   onAuthorizedChange?: (authorized: boolean) => void;
+  onSessionChange?: (authorizationHeader: string | null) => void;
+  dashboardTarget?: HTMLElement | null;
+  riskSource?: "model-csv" | null;
   logoutSignal?: number;
 }
 
@@ -85,6 +89,9 @@ export default function AdminDashboard({
   onReviewCompleted,
   onAdminReportsChange,
   onAuthorizedChange,
+  onSessionChange,
+  dashboardTarget = null,
+  riskSource = null,
   logoutSignal = 0,
 }: AdminDashboardProps) {
   const [username, setUsername] = useState("");
@@ -188,6 +195,7 @@ export default function AdminDashboard({
 
       setAuthorized(true);
       onAuthorizedChange?.(true);
+      onSessionChange?.(makeAuthHeader(username, password));
       setMessage(
         "관리자 로그인이 완료되었습니다."
       );
@@ -197,6 +205,7 @@ export default function AdminDashboard({
     } catch (err) {
       setAuthorized(false);
       onAuthorizedChange?.(false);
+      onSessionChange?.(null);
       setAdminReports([]);
       onAdminReportsChange?.(null);
 
@@ -213,6 +222,7 @@ export default function AdminDashboard({
   // 관리자 로그아웃
   function handleLogout() {
     onAuthorizedChange?.(false);
+    onSessionChange?.(null);
     setAuthorized(false);
     setUsername("");
     setPassword("");
@@ -482,7 +492,7 @@ export default function AdminDashboard({
         report.status === "rejected"
     ).length;
 
-  return (
+  const dashboard = (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -570,8 +580,8 @@ export default function AdminDashboard({
         </p>
 
         <p className="mt-1 text-xs text-gray-500">
-          현재 위험도는 Mock 데이터이며,
-          승인된 제보도 A*에 자동 반영되지 않습니다.
+          {riskSource === "model-csv" ? "AI 모델 CSV 기반 위험도입니다." : "AI 모델 데이터가 연결되지 않았습니다."}
+          승인된 제보는 A* 경로 계산에 자동 반영되지 않습니다.
         </p>
       </div>
 
@@ -737,4 +747,7 @@ export default function AdminDashboard({
       </p>
     </div>
   );
+  // Keep auth state and review actions mounted, but show their dashboard
+  // exclusively inside the authenticated local-government analysis tab.
+  return dashboardTarget ? createPortal(dashboard, dashboardTarget) : null;
 }
