@@ -534,6 +534,28 @@ export default function AdminDashboard({
         </div>
       </div>
 
+      {/* Match the actual B2G report marker fill/stroke colors in MapView. */}
+      <section aria-label="지도 제보 마커 범례" className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <h3 className="text-sm font-bold text-slate-800">지도 아이콘 안내 · 제보 상태</h3>
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-700">
+          {[
+            { label: "검토 대기", fill: "#fbbf24", stroke: "#b45309" },
+            { label: "승인", fill: "#22c55e", stroke: "#15803d" },
+            { label: "반려", fill: "#94a3b8", stroke: "#475569" },
+          ].map(item => (
+            <span key={item.label} className="inline-flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2"
+                style={{ backgroundColor: item.fill, borderColor: item.stroke }} />
+              {item.label}
+            </span>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] leading-4 text-slate-500">
+          지도 원형 마커의 색상은 제보 처리 상태를 뜻합니다. 제보 종류와 상세 내용은 마커를 선택해 확인하세요.
+          지도에서 제보 표시를 끄면 마커도 숨겨집니다.
+        </p>
+      </section>
+
       {/* 상태별 신고 통계 */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
