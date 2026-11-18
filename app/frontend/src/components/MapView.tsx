@@ -497,26 +497,9 @@ export default function MapView({
           </Marker>
         ))}
 
-        {/* DBSCAN model-derived candidate sites. These are NOT installed smoking booths. */}
+        {/* Administrator-only DBSCAN candidate locations; no cluster-center circles. */}
         {audience === "b2g" && showDbscanSites && dbscanSites && (
           <>
-            {dbscanSites.clusters.filter(cluster =>
-              !selectedDbscanCluster || cluster.id === selectedDbscanCluster
-            ).map(cluster => (
-              <CircleMarker key={`cluster-${cluster.id}`}
-                center={[cluster.lat, cluster.lng]} radius={12} bubblingMouseEvents={false}
-                pathOptions={{
-                  color: "#c2410c", weight: 2, dashArray: "4 4",
-                  fillColor: "#fb923c", fillOpacity: 0.25,
-                }}>
-                <Popup>
-                  <strong>DBSCAN 적발 집중지 · 군집 {cluster.id}</strong>
-                  <div>{cluster.representativePlace}</div>
-                  <div>적발 기록 {cluster.recordCount}건 · {cluster.verdict}</div>
-                  <div>군집 중심은 시설 설치 위치가 아닙니다.</div>
-                </Popup>
-              </CircleMarker>
-            ))}
             {dbscanSites.candidates.filter(candidate =>
               !selectedDbscanCluster || candidate.clusterId === selectedDbscanCluster
             ).map(candidate => (
@@ -527,10 +510,9 @@ export default function MapView({
                   fillColor: "#2dd4bf", fillOpacity: 0.95,
                 }}>
                 <Popup>
-                  <strong>흡연시설 입지 후보 · 군집 {candidate.clusterId} / {candidate.rank}순위</strong>
-                  <div>{candidate.representativePlace}</div>
-                  <div>보행 접근거리 {candidate.walkingDistanceM}m</div>
-                  <div>권장 형태: {candidate.recommendedType}</div>
+                  <strong>흡연시설 입지 후보</strong>
+                  <div>적발 집중지: {candidate.representativePlace}</div>
+                  <div>적발 집중지 주변 {Math.round(candidate.walkingDistanceM)}m</div>
                   <div>현장 검토 전 분석 후보 · 실제 설치 시설 아님</div>
                 </Popup>
               </CircleMarker>
