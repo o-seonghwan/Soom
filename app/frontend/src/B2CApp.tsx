@@ -22,6 +22,7 @@ import { getRoutes } from "./services/routeService";
 import { getRisks } from "./services/riskService";
 import { getB2GCleanEdges } from "./services/cleanlinessService";
 import type { CleanEdgeFeature } from "./types/cleanliness";
+import { getCleanColor } from "./utils/cleanColor";
 import {
   getReports,
   createReport,
@@ -90,7 +91,11 @@ export default function App() {
   // ---------------------------------------
 
   const [pageMode, setPageMode] =
-    useState<PageMode>("shortest");
+    useState<PageMode>("safest");
+
+  // Tab choice controls which searched route receives per-link cleanliness colors.
+  // Keeping it separate from the report tab avoids resetting the route highlight.
+  const [selectedRouteId, setSelectedRouteId] = useState<"shortest" | "safest">("safest");
 
   const [showControls, setShowControls] = useState(false);
 
@@ -576,12 +581,13 @@ export default function App() {
       if (controller.signal.aborted || sequence !== routeRequestSequence.current) return;
 
       setRoutes(result.routes);
+      setSelectedRouteId("safest");
       setSearchStatus("success");
       if (!auto) {
         setFitBoundsRoutes(result.routes);
-        // Manual searches keep the existing result-first experience.
-        setShowControls(false);
-        setPageMode("shortest");
+        // Show route tabs immediately, with avoidance selected initially.
+        setShowControls(true);
+        setPageMode("safest");
       }
     } catch (error) {
       if (controller.signal.aborted || sequence !== routeRequestSequence.current) return;
@@ -647,6 +653,7 @@ export default function App() {
 
   function changePage(mode: PageMode) {
     setPageMode(mode);
+    if (mode === "shortest" || mode === "safest") setSelectedRouteId(mode);
     setReportLocation(null);
     setReportNotice(null);
 
@@ -728,6 +735,7 @@ export default function App() {
           start={start}
           end={end}
           routes={routes}
+          selectedRouteId={selectedRouteId}
           fitBoundsRoutes={fitBoundsRoutes}
           risks={risks}
           cleanlinessEdges={cleanlinessEdges}
@@ -752,17 +760,27 @@ export default function App() {
           onMapClick={handleMapClick}
         />
 
-        {showRisks &&
-          !riskLoading &&
-          !riskError && cleanlinessEdges.length > 0 && (
-            <div className="absolute bottom-3 left-3 z-[500] rounded-xl bg-white/95 p-3 text-xs shadow-lg">
-              <p className="font-bold text-slate-800">보행로 청정지수 · AI 모델</p>
-              <p className="mt-1 text-gray-600">초록색이 진할수록 청정지수가 높음</p>
-              <div className="mt-2 h-2 w-full rounded" style={{background: "linear-gradient(90deg, rgba(22,163,74,0.18), rgba(22,163,74,0.85))"}} />
-              <div className="mt-1 flex justify-between text-gray-500"><span>청정지수 낮음</span><span>청정지수 높음</span></div>
-              <p className="mt-2 text-[10px] text-gray-500">15레벨 이상 확대 시 표시 · 모델 예측 기반 · 실측 대기질 아님</p>
+        {routes.length > 0 && (
+          <div className="absolute bottom-3 left-3 z-[500] rounded-xl bg-white/95 p-3 text-xs shadow-lg">
+            <p className="font-bold text-slate-800">선택 경로 · 보행 링크 청정지수</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-600">
+              {[
+                {value: 10, label: "0–19"},
+                {value: 30, label: "20–39"},
+                {value: 50, label: "40–59"},
+                {value: 70, label: "60–79"},
+                {value: 90, label: "80–100"},
+              ].map(({value, label}) => (
+                <span key={value} className="inline-flex items-center gap-1">
+                  <span className="h-2.5 w-4 rounded" style={{background: getCleanColor(value)}} />
+                  {label}
+                </span>
+              ))}
+              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-4 rounded bg-slate-400" />미선택/점수 없음</span>
             </div>
-          )}
+            <p className="mt-2 text-[10px] text-slate-500">예측 모델 기반 · 실측 대기질 아님 · 선택 경로에만 적용</p>
+          </div>
+        )}
         <button type="button" onClick={() => setShowControls(value => !value)}
           aria-expanded={showControls}
           className="absolute left-3 top-[124px] max-[760px]:top-[224px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
