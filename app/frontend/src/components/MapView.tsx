@@ -63,6 +63,9 @@ interface MapViewProps {
   onAvoidanceLevelChange?: (value: RouteRequest["avoidanceLevel"]) => void;
   onToggleCleanliness?: () => void;
   onToggleReports?: () => void;
+  riskNoticeOpen?: boolean;
+  onToggleRiskNotice?: () => void;
+  onCloseRiskNotice?: () => void;
   reportLocation: Coordinate | null;
   focusPoint: Coordinate | null;
   selectionMode?: "start" | "end";
@@ -233,6 +236,9 @@ export default function MapView({
   onAvoidanceLevelChange,
   onToggleCleanliness,
   onToggleReports,
+  riskNoticeOpen = false,
+  onToggleRiskNotice,
+  onCloseRiskNotice,
   reportLocation,
   focusPoint,
   selectionMode = "start",
@@ -636,6 +642,35 @@ export default function MapView({
             className={`flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 border-slate-200`}>
             <img src="/icons/current-location.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
           </button>
+        )}
+        {audience === "b2c" && onToggleRiskNotice && (
+          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
+            <button type="button" onClick={onToggleRiskNotice}
+              aria-label="위험지수 이용 안내"
+              aria-expanded={riskNoticeOpen}
+              title="위험지수 이용 안내"
+              className="flex h-11 w-11 items-center justify-center bg-transparent p-0 text-3xl font-semibold text-slate-800 drop-shadow-sm hover:text-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900">
+              <span aria-hidden="true">ⓘ</span>
+            </button>
+            {riskNoticeOpen && (
+              <section role="status" aria-label="위험지수 이용 안내"
+                className="absolute right-[calc(100%+12px)] top-0 z-[800] w-[min(340px,calc(100vw-6rem))] rounded-xl border border-amber-300 bg-amber-50/95 p-3 text-xs leading-5 text-amber-950 shadow-xl">
+                <div className="flex items-start justify-between gap-2">
+                  <strong className="text-sm">위험지수 이용 안내</strong>
+                  <button type="button" onClick={onCloseRiskNotice ?? onToggleRiskNotice}
+                    aria-label="위험지수 안내 닫기" className="rounded px-1 text-base font-bold">×</button>
+                </div>
+                <p className="mt-2">
+                  이 지도는 보행 환경의 간접흡연 노출 가능성을 예측한 것으로,
+                  특정 상점이나 건물의 흡연 발생 여부 또는 책임을 평가하지 않습니다.
+                </p>
+                <p className="mt-1">
+                  위험지수는 위치와 주변 환경에 따른 상대적 참고 정보이며,
+                  실제 현장 상황과 다를 수 있습니다.
+                </p>
+              </section>
+            )}
+          </div>
         )}
         {showSmokingZones && smokingZonesMessage && (
           <p role="status" className="max-w-52 rounded-lg bg-white/95 p-2 text-xs text-slate-700 shadow">

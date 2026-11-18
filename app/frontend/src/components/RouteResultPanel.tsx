@@ -3,8 +3,8 @@ import type { Route } from "../types/route";
 interface Props { route: Route | undefined; type: "shortest" | "safest"; }
 export default function RouteResultPanel({ route, type }: Props) {
   const shortest = type === "shortest";
-  const color = shortest ? "#343A40" : "#72EFDD";
-  const foreground = shortest ? "#FFFFFF" : "#163F3B";
+  const color = "#343A40";
+  const foreground = "#FFFFFF";
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 text-sm font-bold text-slate-800">

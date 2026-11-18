@@ -218,6 +218,32 @@ export default function App() {
   const [routes, setRoutes] =
     useState<Route[]>([]);
 
+  // Show the interpretation notice briefly after an explicit route search.
+  // The information button remains available above Leaflet's zoom controls.
+  const [showRiskNotice, setShowRiskNotice] = useState(false);
+  const riskNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function cancelRiskNoticeTimer() {
+    if (riskNoticeTimer.current !== null) {
+      window.clearTimeout(riskNoticeTimer.current);
+      riskNoticeTimer.current = null;
+    }
+  }
+
+  function showTimedRiskNotice() {
+    cancelRiskNoticeTimer();
+    setShowRiskNotice(true);
+    riskNoticeTimer.current = window.setTimeout(() => {
+      setShowRiskNotice(false);
+      riskNoticeTimer.current = null;
+    }, 7000);
+  }
+
+  function toggleRiskNotice() {
+    cancelRiskNoticeTimer();
+    setShowRiskNotice(value => !value);
+  }
+
   // Only explicit route searches should zoom/pan to route bounds.
   // Slider-driven recalculation updates the lines without changing the viewport.
   const [fitBoundsRoutes, setFitBoundsRoutes] = useState<Route[]>([]);
@@ -240,6 +266,7 @@ export default function App() {
 
   useEffect(() => {
     return () => {
+      cancelRiskNoticeTimer();
       if (avoidanceSearchTimer.current !== null) window.clearTimeout(avoidanceSearchTimer.current);
       routeRequestSequence.current += 1;
       routeRequestController.current?.abort();
@@ -524,6 +551,10 @@ export default function App() {
     searchInProgress.current = true;
     searchStartTime.current = performance.now();
 
+    if (!auto) {
+      cancelRiskNoticeTimer();
+      setShowRiskNotice(false);
+    }
     setElapsedSeconds(0);
     setSearchStatus("idle");
     setLoading(true);
@@ -541,6 +572,7 @@ export default function App() {
         // Show route tabs immediately, with avoidance selected initially.
         setShowControls(true);
         setPageMode("safest");
+        showTimedRiskNotice();
       }
     } catch (error) {
       if (controller.signal.aborted || sequence !== routeRequestSequence.current) return;
@@ -699,6 +731,9 @@ export default function App() {
           onAvoidanceLevelChange={handleAvoidanceLevelChange}
           onToggleCleanliness={() => setShowRisks(value => !value)}
           onToggleReports={() => setShowReports(value => !value)}
+          riskNoticeOpen={showRiskNotice}
+          onToggleRiskNotice={toggleRiskNotice}
+          onCloseRiskNotice={() => { cancelRiskNoticeTimer(); setShowRiskNotice(false); }}
           reportLocation={reportLocation}
           focusPoint={focusPoint}
           selectionMode={selectionMode}

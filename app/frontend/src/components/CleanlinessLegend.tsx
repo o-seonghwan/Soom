@@ -26,6 +26,9 @@ export default function CleanlinessLegend({ scope }: CleanlinessLegendProps) {
       className="absolute bottom-3 left-3 z-[500] w-[min(360px,calc(100%-24px))] rounded-xl bg-white/95 p-3 text-xs shadow-lg"
     >
       <p className="font-bold text-slate-800">보행 링크 청정지수 · AI 모델</p>
+      <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11px] font-semibold leading-4 text-amber-950">
+        과거 담배꽁초 적발 기록과 주변 환경을 활용한 상대적 예측지수입니다. 현재의 실제 흡연 여부나 대기질 측정값이 아닙니다.
+      </p>
       <p className="mt-1 text-[10px] text-slate-500">
         {scope === "route" ? "선택 경로의 링크별 예측지수" : "전체 보행로의 링크별 예측지수"}
       </p>
@@ -50,7 +53,7 @@ export default function CleanlinessLegend({ scope }: CleanlinessLegendProps) {
         )}
       </div>
       <p className="mt-2 text-[10px] leading-4 text-slate-500">
-        청정지수가 높을수록 상대적으로 청정 · 미산정은 안전 판정이 아님 · 실측 대기질 아님
+        청정지수가 높을수록 상대적으로 청정 · 미산정은 안전 판정이 아님
       </p>
     </div>
   );
