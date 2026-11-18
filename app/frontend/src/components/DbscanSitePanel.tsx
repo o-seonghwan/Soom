@@ -31,6 +31,21 @@ export default function DbscanSitePanel({
         </p>
       </header>
 
+      {/* Match the B2G DBSCAN candidate CircleMarker colors in MapView. */}
+      <section aria-label="입지 추천 지도 마커 범례"
+        className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+        <h4 className="text-sm font-bold text-emerald-900">지도 아이콘 안내 · 추천 후보</h4>
+        <div className="mt-2 flex items-center gap-2 text-xs text-emerald-950">
+          <span aria-hidden="true" className="inline-block h-4 w-4 shrink-0 rounded-full border-[3px]"
+            style={{ backgroundColor: "#2dd4bf", borderColor: "#065f46" }} />
+          <span>민트색 원: 흡연시설 설치를 검토할 입지 후보</span>
+        </div>
+        <p className="mt-2 text-[11px] leading-4 text-emerald-900">
+          지도에 표시된 원은 분석이 추천한 후보 보행 지점입니다.
+          이미 설치된 흡연시설이나 설치 승인이 완료된 장소가 아닙니다.
+        </p>
+      </section>
+
       {loading && <p role="status" className="text-sm text-slate-600">입지 후보 데이터를 불러오는 중...</p>}
       {error && (
         <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
