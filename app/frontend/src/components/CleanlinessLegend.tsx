@@ -53,7 +53,7 @@ export default function CleanlinessLegend({ scope }: CleanlinessLegendProps) {
         )}
       </div>
       <p className="mt-2 text-[10px] leading-4 text-slate-500">
-        청정지수가 높을수록 상대적으로 청정 · 미산정은 안전 판정이 아님 · 실측 대기질 아님
+        청정지수가 높을수록 상대적으로 청정 · 미산정은 안전 판정이 아님
       </p>
     </div>
   );
