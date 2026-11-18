@@ -731,6 +731,8 @@ export default function App() {
           onAvoidanceLevelChange={handleAvoidanceLevelChange}
           onToggleCleanliness={() => setShowRisks(value => !value)}
           onToggleReports={() => setShowReports(value => !value)}
+          riskNoticeOpen={showRiskNotice}
+          onToggleRiskNotice={toggleRiskNotice}
           reportLocation={reportLocation}
           focusPoint={focusPoint}
           selectionMode={selectionMode}
@@ -746,15 +748,6 @@ export default function App() {
         />
 
         {routes.length > 0 && <CleanlinessLegend scope="route" />}
-        {/* Persistent information icon, directly above Leaflet's bottom-right zoom control. */}
-        <button type="button"
-          onClick={toggleRiskNotice}
-          aria-label="위험지수 이용 안내"
-          aria-expanded={showRiskNotice}
-          title="위험지수 이용 안내"
-          className="absolute bottom-[84px] right-3 z-[800] flex h-[34px] w-[34px] items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-base font-bold text-slate-700 shadow-lg hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900">
-          <span aria-hidden="true">ⓘ</span>
-        </button>
         {showRiskNotice && (
           <section role="status" aria-label="위험지수 이용 안내"
             className="absolute bottom-[132px] right-3 z-[800] w-[min(340px,calc(100%-24px))] rounded-xl border border-amber-300 bg-amber-50/95 p-3 text-xs leading-5 text-amber-950 shadow-xl">
