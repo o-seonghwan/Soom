@@ -28,6 +28,9 @@ def _number(row, field, row_num, required=False):
     except ValueError as exc:
         raise ValueError(f"{row_num}행 '{field}' 숫자 변환 실패") from exc
     if not math.isfinite(number):
+        if not required and math.isnan(number):
+            # pandas may export an unavailable optional metric as NaN.
+            return None
         raise ValueError(f"{row_num}행 '{field}' 유한한 값이 아님")
     return number
 
