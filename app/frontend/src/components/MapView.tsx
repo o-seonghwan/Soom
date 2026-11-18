@@ -64,6 +64,7 @@ interface MapViewProps {
   onToggleCleanliness?: () => void;
   onToggleReports?: () => void;
   riskNoticeOpen?: boolean;
+  riskNoticeFading?: boolean;
   onToggleRiskNotice?: () => void;
   onCloseRiskNotice?: () => void;
   reportLocation: Coordinate | null;
@@ -237,6 +238,7 @@ export default function MapView({
   onToggleCleanliness,
   onToggleReports,
   riskNoticeOpen = false,
+  riskNoticeFading = false,
   onToggleRiskNotice,
   onCloseRiskNotice,
   reportLocation,
@@ -654,7 +656,7 @@ export default function MapView({
             </button>
             {riskNoticeOpen && (
               <section role="status" aria-label="위험지수 이용 안내"
-                className="absolute right-[calc(100%+12px)] top-0 z-[800] w-[min(340px,calc(100vw-6rem))] rounded-xl border border-amber-300 bg-amber-50/95 p-3 text-xs leading-5 text-amber-950 shadow-xl">
+                className={`absolute right-[calc(100%+8px)] top-0 z-[800] w-[min(340px,calc(100vw-6rem))] rounded-xl border border-amber-300 bg-amber-50/95 p-3 text-xs leading-5 text-amber-950 shadow-xl transition-opacity duration-[2500ms] ease-in-out ${riskNoticeFading ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <strong className="text-sm">위험지수 이용 안내</strong>
                   <button type="button" onClick={onCloseRiskNotice ?? onToggleRiskNotice}
