@@ -12,16 +12,12 @@ import type {
   RouteRequest,
 } from "./types/route";
 
-import type { RiskLocation } from "./types/risk";
 import type {
   Report,
   ReportRequest,
 } from "./types/report";
 
 import { getRoutes } from "./services/routeService";
-import { getRisks } from "./services/riskService";
-import { getB2GCleanEdges } from "./services/cleanlinessService";
-import type { CleanEdgeFeature } from "./types/cleanliness";
 import { getCleanColor } from "./utils/cleanColor";
 import {
   getReports,
@@ -250,24 +246,8 @@ export default function App() {
     };
   }, []);
 
-  // ---------------------------------------
-  // 위험도 데이터
-  // ---------------------------------------
-
-  const [risks, setRisks] =
-    useState<RiskLocation[]>([]);
-
-  const [cleanlinessEdges, setCleanlinessEdges] =
-    useState<CleanEdgeFeature[]>([]);
-
-  const [riskLoading, setRiskLoading] =
-    useState(true);
-
-  const [riskError, setRiskError] =
-    useState<string | null>(null);
-
-  const [showRisks, setShowRisks] =
-    useState(true);
+  // Path cleanliness comes from scored route segments, not a full-map overlay.
+  const [showRisks, setShowRisks] = useState(true);
 
   // ---------------------------------------
   // 공개 제보 데이터
@@ -323,33 +303,6 @@ export default function App() {
     let cancelled = false;
 
     async function loadInitialData() {
-      try {
-        const [riskData, edgeData] = await Promise.all([
-          getRisks(),
-          getB2GCleanEdges(),
-        ]);
-
-        if (!cancelled) {
-          setRisks(riskData);
-          setCleanlinessEdges(edgeData.features);
-          setRiskError(null);
-        }
-      } catch (error) {
-        console.error("위험도 조회 실패:", error);
-
-        if (!cancelled) {
-          setRisks([]);
-          setCleanlinessEdges([]);
-          setRiskError(
-            "AI 모델 청정지수 보행로를 불러오지 못했습니다. LUNG_RISK_CSV 설정을 확인하세요."
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setRiskLoading(false);
-        }
-      }
-
       try {
         const reportData = await getReports();
 
@@ -737,8 +690,8 @@ export default function App() {
           routes={routes}
           selectedRouteId={selectedRouteId}
           fitBoundsRoutes={fitBoundsRoutes}
-          risks={risks}
-          cleanlinessEdges={cleanlinessEdges}
+          risks={[]}
+          cleanlinessEdges={[]}
           reports={reports}
           showRisks={showRisks}
           showReports={showReports}
@@ -867,21 +820,6 @@ export default function App() {
               </p>
             )}
           </div>
-        )}
-
-        {riskLoading && (
-          <p className="mt-2 text-xs text-gray-500">
-            위험도 데이터를 불러오는 중...
-          </p>
-        )}
-
-        {riskError && (
-          <p
-            role="alert"
-            className="mt-2 text-xs text-red-600"
-          >
-            {riskError}
-          </p>
         )}
 
         {reportError && (
