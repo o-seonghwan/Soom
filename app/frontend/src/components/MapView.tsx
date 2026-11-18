@@ -63,6 +63,8 @@ interface MapViewProps {
   onAvoidanceLevelChange?: (value: RouteRequest["avoidanceLevel"]) => void;
   onToggleCleanliness?: () => void;
   onToggleReports?: () => void;
+  riskNoticeOpen?: boolean;
+  onToggleRiskNotice?: () => void;
   reportLocation: Coordinate | null;
   focusPoint: Coordinate | null;
   selectionMode?: "start" | "end";
@@ -233,6 +235,8 @@ export default function MapView({
   onAvoidanceLevelChange,
   onToggleCleanliness,
   onToggleReports,
+  riskNoticeOpen = false,
+  onToggleRiskNotice,
   reportLocation,
   focusPoint,
   selectionMode = "start",
@@ -635,6 +639,15 @@ export default function MapView({
             title={currentLocation ? "현재 위치로 지도 이동 (위치 확인됨)" : "현재 위치로 지도 이동 (위치 권한 동의 필요)"}
             className={`flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 border-slate-200`}>
             <img src="/icons/current-location.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
+          </button>
+        )}
+        {audience === "b2c" && onToggleRiskNotice && (
+          <button type="button" onClick={onToggleRiskNotice}
+            aria-label="위험지수 이용 안내"
+            aria-expanded={riskNoticeOpen}
+            title="위험지수 이용 안내"
+            className="flex h-11 w-11 items-center justify-center bg-transparent p-0 text-3xl font-semibold text-slate-800 drop-shadow-sm hover:text-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900">
+            <span aria-hidden="true">ⓘ</span>
           </button>
         )}
         {showSmokingZones && smokingZonesMessage && (
