@@ -257,7 +257,10 @@ export default function B2GDashboard() {
               setShowDashboard(true);
               setAnalysisTab("reports");
             } else {
-              setShowAdminPanel(false);
+              // An incorrect password also reports unauthorized. Keep the
+              // login form visible so Enter does not make it disappear.
+              // Actual logout from an authenticated session can close it.
+              if (adminAuthorized) setShowAdminPanel(false);
               setShowDashboard(false);
               setDashboardTarget(null);
             }
