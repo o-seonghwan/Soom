@@ -367,17 +367,27 @@ export default function MapView({
           <GeoJSON
             key={`clean-roads-b2g-${cleanlinessEdges.length}`}
             data={{ type: "FeatureCollection", features: deduplicateCleanEdges(cleanlinessEdges) } as FeatureCollection}
-            style={(feature) => ({
-              color: getCleanColor(Number(feature?.properties?.cleanIndex ?? 100)),
-              weight: 3,
-              opacity: 0.36,
-              lineCap: "round",
-              lineJoin: "round",
-            })}
+            style={(feature) => {
+              const rawClean = feature?.properties?.cleanIndex;
+              const hasScore = rawClean != null && Number.isFinite(Number(rawClean));
+              return {
+                color: hasScore ? getCleanColor(Number(rawClean)) : "#64748b",
+                weight: 3,
+                opacity: 0.36,
+                lineCap: "round",
+                lineJoin: "round",
+              };
+            }}
             onEachFeature={(feature, layer) => {
-              const clean = Number(feature.properties?.cleanIndex ?? 100);
-              const risk = Number(feature.properties?.score ?? 0);
-              layer.bindPopup(`보행 링크 청정지수: ${clean.toFixed(1)}/100<br/>유효 위험점수: ${risk.toFixed(1)}/100`);
+              const rawClean = feature.properties?.cleanIndex;
+              const rawRisk = feature.properties?.score;
+              if (rawClean == null || !Number.isFinite(Number(rawClean))) {
+                layer.bindPopup("보행 링크 청정지수: 데이터 없음 · 회색은 미측정 구간");
+              } else {
+                const clean = Number(rawClean);
+                const risk = rawRisk == null ? null : Number(rawRisk);
+                layer.bindPopup(`보행 링크 청정지수: ${clean.toFixed(1)}/100<br/>유효 위험점수: ${risk != null && Number.isFinite(risk) ? risk.toFixed(1) + "/100" : "데이터 없음"}`);
+              }
             }}
           />
         )}
