@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import L from "leaflet";
 
 import {
@@ -8,7 +8,6 @@ import {
   ZoomControl,
   CircleMarker,
   Marker,
-  Circle,
   Polyline,
   Popup,
   GeoJSON,
@@ -23,7 +22,6 @@ import type { Report } from "../types/report";
 
 import { getCleanColor } from "../utils/cleanColor";
 import type { CleanEdgeFeature } from "../types/cleanliness";
-import B2CCleanRoads from "./B2CCleanRoads";
 import MapRouteCard from "./MapRouteCard";
 import RoutePanel from "./RoutePanel";
 import type { RouteRequest } from "../types/route";
@@ -50,6 +48,7 @@ interface MapViewProps {
   start: Coordinate | null;
   end: Coordinate | null;
   routes: Route[];
+  selectedRouteId?: "shortest" | "safest";
   fitBoundsRoutes?: Route[];
   risks: RiskLocation[];
   cleanlinessEdges?: CleanEdgeFeature[];
@@ -217,6 +216,7 @@ export default function MapView({
   start,
   end,
   routes,
+  selectedRouteId = "safest",
   fitBoundsRoutes = routes,
   risks,
   cleanlinessEdges,
@@ -383,56 +383,63 @@ export default function MapView({
           />
         )}
 
-        {/* B2C: 초록색 단일 Canvas, 픽셀별 최대 불투명도만 적용 */}
-        {audience === "b2c" && showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
-          <B2CCleanRoads edges={cleanlinessEdges} />
-        )}
-
-        {/* 구형 데이터 사용 화면에만 기존 위험 원형 유지. 모델 보행로와 중복 표시하지 않음. */}
-        {audience === "b2c" && !cleanlinessEdges && showRisks &&
-          risks.map((risk) => (
-            <Circle
-              key={risk.id}
-              center={[risk.lat, risk.lng]}
-              radius={risk.radiusM}
-              bubblingMouseEvents={false}
-              pathOptions={{
-                color: "#64748b",
-                fillColor: "#93c5d6",
-                fillOpacity: 0.35,
-                weight: 1,
-              }}
-            >
-              <Popup>
-                <strong>간접흡연 위험도</strong>
-                <div>
-                  위험점수: {risk.score}/100
-                </div>
-              </Popup>
-            </Circle>
-          ))}
-
-        {/* A* 경로 */}
-        {routes.map((route) => (
-          <Polyline
-            key={route.id}
-            positions={route.coordinates}
+        {/* Draw only the two searched routes: inactive first, selected on top.
+            B2G keeps the original non-B2C map layers untouched. */}
+        {audience === "b2c" ? (
+          <>
+            {routes.filter(route => route.id !== selectedRouteId).map(route => (
+              <Polyline key={`inactive-${route.id}`} positions={route.coordinates}
+                bubblingMouseEvents={false}
+                pathOptions={{
+                  color: "#94a3b8",
+                  weight: 5,
+                  opacity: 0.75,
+                  lineCap: "round",
+                  lineJoin: "round",
+                }}>
+                <Popup><strong>{route.name}</strong><div>선택되지 않은 경로 · {route.distanceM}m</div></Popup>
+              </Polyline>
+            ))}
+            {routes.filter(route => route.id === selectedRouteId).map(route => (
+              <Fragment key={`active-${route.id}`}>
+                {/* Missing model coverage stays gray; no guessed cleanliness score. */}
+                {route.segments && route.segments.length > 0
+                  ? route.segments.filter(segment => segment.coordinates.length >= 2).map((segment, index) => (
+                    <Polyline key={index} positions={segment.coordinates}
+                      bubblingMouseEvents={false}
+                      pathOptions={{
+                        color: showRisks && segment.cleanIndex != null && Number.isFinite(segment.cleanIndex)
+                          ? getCleanColor(segment.cleanIndex)
+                          : "#64748b",
+                        weight: 7,
+                        opacity: 0.98,
+                        lineCap: "round",
+                        lineJoin: "round",
+                      }}>
+                      <Popup>
+                        <strong>{route.name}</strong>
+                        <div>{segment.cleanIndex == null ? "청정지수 데이터 없음" : `보행 링크 청정지수: ${segment.cleanIndex.toFixed(1)}/100`}</div>
+                      </Popup>
+                    </Polyline>
+                  ))
+                  : <Polyline positions={route.coordinates} bubblingMouseEvents={false}
+                      pathOptions={{ color: "#64748b", weight: 7, opacity: 0.98, lineCap: "round" }}>
+                      <Popup><strong>{route.name}</strong><div>보행 링크 청정지수 데이터 없음</div></Popup>
+                    </Polyline>}
+              </Fragment>
+            ))}
+          </>
+        ) : routes.map(route => (
+          <Polyline key={route.id} positions={route.coordinates}
             bubblingMouseEvents={false}
             pathOptions={{
-              color:
-                route.id === "shortest"
-                  ? "#343A40"
-                  : "#72EFDD",
+              color: route.id === "shortest" ? "#343A40" : "#72EFDD",
               weight: route.id === "shortest" ? 5 : 6,
               opacity: 0.98,
               lineCap: "round",
               lineJoin: "round",
-            }}
-          >
-            <Popup>
-              <strong>{route.name}</strong>
-              <div>거리: {route.distanceM}m</div>
-            </Popup>
+            }}>
+            <Popup><strong>{route.name}</strong><div>거리: {route.distanceM}m</div></Popup>
           </Polyline>
         ))}
 
