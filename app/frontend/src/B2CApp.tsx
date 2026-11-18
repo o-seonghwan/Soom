@@ -221,26 +221,46 @@ export default function App() {
   // Show the interpretation notice briefly after an explicit route search.
   // The information button remains available above Leaflet's zoom controls.
   const [showRiskNotice, setShowRiskNotice] = useState(false);
+  const [riskNoticeFading, setRiskNoticeFading] = useState(false);
   const riskNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const riskNoticeFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function cancelRiskNoticeTimer() {
     if (riskNoticeTimer.current !== null) {
       window.clearTimeout(riskNoticeTimer.current);
       riskNoticeTimer.current = null;
     }
+    if (riskNoticeFadeTimer.current !== null) {
+      window.clearTimeout(riskNoticeFadeTimer.current);
+      riskNoticeFadeTimer.current = null;
+    }
+  }
+
+  function closeRiskNotice() {
+    cancelRiskNoticeTimer();
+    setRiskNoticeFading(false);
+    setShowRiskNotice(false);
   }
 
   function showTimedRiskNotice() {
     cancelRiskNoticeTimer();
+    setRiskNoticeFading(false);
     setShowRiskNotice(true);
+    // Keep the existing total display time (7 seconds), but fade the last 2.5 seconds.
+    riskNoticeFadeTimer.current = window.setTimeout(() => {
+      setRiskNoticeFading(true);
+      riskNoticeFadeTimer.current = null;
+    }, 4500);
     riskNoticeTimer.current = window.setTimeout(() => {
       setShowRiskNotice(false);
+      setRiskNoticeFading(false);
       riskNoticeTimer.current = null;
     }, 7000);
   }
 
   function toggleRiskNotice() {
     cancelRiskNoticeTimer();
+    setRiskNoticeFading(false);
     setShowRiskNotice(value => !value);
   }
 
@@ -552,8 +572,7 @@ export default function App() {
     searchStartTime.current = performance.now();
 
     if (!auto) {
-      cancelRiskNoticeTimer();
-      setShowRiskNotice(false);
+      closeRiskNotice();
     }
     setElapsedSeconds(0);
     setSearchStatus("idle");
@@ -732,8 +751,9 @@ export default function App() {
           onToggleCleanliness={() => setShowRisks(value => !value)}
           onToggleReports={() => setShowReports(value => !value)}
           riskNoticeOpen={showRiskNotice}
+          riskNoticeFading={riskNoticeFading}
           onToggleRiskNotice={toggleRiskNotice}
-          onCloseRiskNotice={() => { cancelRiskNoticeTimer(); setShowRiskNotice(false); }}
+          onCloseRiskNotice={closeRiskNotice}
           reportLocation={reportLocation}
           focusPoint={focusPoint}
           selectionMode={selectionMode}
