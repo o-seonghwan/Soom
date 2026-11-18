@@ -22,6 +22,7 @@ import type { Report } from "../types/report";
 
 import { getCleanColor } from "../utils/cleanColor";
 import type { CleanEdgeFeature } from "../types/cleanliness";
+import type { DbscanSitesResponse } from "../types/dbscan";
 import MapRouteCard from "./MapRouteCard";
 import RoutePanel from "./RoutePanel";
 import type { RouteRequest } from "../types/route";
@@ -52,6 +53,9 @@ interface MapViewProps {
   fitBoundsRoutes?: Route[];
   risks: RiskLocation[];
   cleanlinessEdges?: CleanEdgeFeature[];
+  dbscanSites?: DbscanSitesResponse | null;
+  showDbscanSites?: boolean;
+  selectedDbscanCluster?: string;
   reports: Report[];
   showRisks: boolean;
   showReports: boolean;
@@ -219,6 +223,9 @@ export default function MapView({
   selectedRouteId = "safest",
   fitBoundsRoutes = routes,
   cleanlinessEdges,
+  dbscanSites = null,
+  showDbscanSites = false,
+  selectedDbscanCluster = "",
   reports,
   showRisks,
   showReports,
@@ -489,6 +496,29 @@ export default function MapView({
             </Popup>
           </Marker>
         ))}
+
+        {/* Administrator-only DBSCAN candidate locations; no cluster-center circles. */}
+        {audience === "b2g" && showDbscanSites && dbscanSites && (
+          <>
+            {dbscanSites.candidates.filter(candidate =>
+              !selectedDbscanCluster || candidate.clusterId === selectedDbscanCluster
+            ).map(candidate => (
+              <CircleMarker key={`site-${candidate.id}`}
+                center={[candidate.lat, candidate.lng]} radius={8} bubblingMouseEvents={false}
+                pathOptions={{
+                  color: "#065f46", weight: 3,
+                  fillColor: "#2dd4bf", fillOpacity: 0.95,
+                }}>
+                <Popup>
+                  <strong>흡연시설 입지 후보</strong>
+                  <div>적발 집중지: {candidate.representativePlace}</div>
+                  <div>적발 집중지 주변 {Math.round(candidate.walkingDistanceM)}m</div>
+                  <div>현장 검토 전 분석 후보 · 실제 설치 시설 아님</div>
+                </Popup>
+              </CircleMarker>
+            ))}
+          </>
+        )}
 
         {/* 사용자 제보 */}
         {showReports &&

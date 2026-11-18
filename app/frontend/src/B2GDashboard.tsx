@@ -1,11 +1,14 @@
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import MapView from "./components/MapView";
 import AdminDashboard from "./components/AdminDashboard";
 import { getB2GCleanEdges } from "./services/cleanlinessService";
 import type { CleanEdgeFeature } from "./types/cleanliness";
 import CleanlinessLegend from "./components/CleanlinessLegend";
+import DbscanSitePanel from "./components/DbscanSitePanel";
+import { getDbscanSites } from "./services/dbscanService";
+import type { DbscanSitesResponse, DbscanCandidate } from "./types/dbscan";
 
 import { getReports } from "./services/reportService";
 import { getRisks } from "./services/riskService";
@@ -36,6 +39,13 @@ export default function B2GDashboard() {
   const [showRisks, setShowRisks] =
     useState(true);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [analysisTab, setAnalysisTab] = useState<"reports" | "dbscan">("reports");
+  const [dashboardTarget, setDashboardTarget] = useState<HTMLDivElement | null>(null);
+  const authHeaderRef = useRef<string | null>(null);
+  const [dbscanSites, setDbscanSites] = useState<DbscanSitesResponse | null>(null);
+  const [dbscanLoading, setDbscanLoading] = useState(false);
+  const [dbscanError, setDbscanError] = useState("");
+  const [selectedDbscanCluster, setSelectedDbscanCluster] = useState("");
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [adminAuthorized, setAdminAuthorized] = useState(false);
   const [logoutSignal, setLogoutSignal] = useState(0);
@@ -48,6 +58,48 @@ export default function B2GDashboard() {
 
   const [error, setError] =
     useState("");
+
+  // The authenticated session is supplied by the already-mounted login controller.
+  // Results are never shown or loaded before successful administrator login.
+  function handleSessionChange(header: string | null) {
+    authHeaderRef.current = header;
+    if (!header) {
+      setDbscanSites(null);
+      setDbscanError("");
+      setDbscanLoading(false);
+      setSelectedDbscanCluster("");
+      setAnalysisTab("reports");
+      setShowDashboard(false);
+    }
+  }
+
+  async function loadDbscanSites() {
+    const header = authHeaderRef.current;
+    if (!header) return;
+    setDbscanLoading(true);
+    setDbscanError("");
+    try {
+      const result = await getDbscanSites(header);
+      // A late network response must not restore private data after logout.
+      if (authHeaderRef.current === header) setDbscanSites(result);
+    } catch (err) {
+      if (authHeaderRef.current !== header) return;
+      setDbscanSites(null);
+      setDbscanError(err instanceof Error ? err.message : "입지 후보 데이터 조회 실패");
+    } finally {
+      if (authHeaderRef.current === header) setDbscanLoading(false);
+    }
+  }
+
+  function selectAnalysisTab(tab: "reports" | "dbscan") {
+    setAnalysisTab(tab);
+    if (tab === "dbscan" && !dbscanSites && !dbscanLoading) void loadDbscanSites();
+  }
+
+  function focusDbscanCandidate(candidate: DbscanCandidate) {
+    setFocusPoint([candidate.lat, candidate.lng]);
+    setShowDashboard(false);
+  }
 
   // 공개 신고 최신 목록 조회
   const refreshPublicReports = useCallback(
@@ -154,13 +206,6 @@ export default function B2GDashboard() {
 
       {/* Header admin control: left of the existing service selector in App.tsx. */}
       <div className="absolute right-[4.25rem] top-3 z-[1201] flex items-center gap-2">
-        {adminAuthorized && (
-          <button type="button" onClick={() => setShowAdminPanel(value => !value)}
-            aria-expanded={showAdminPanel}
-            className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow">
-            관리자 관리
-          </button>
-        )}
         <button type="button"
           onClick={() => {
             if (adminAuthorized) {
@@ -184,12 +229,25 @@ export default function B2GDashboard() {
             aria-label="관리자 창 닫기" className="rounded-lg border px-3 py-1 text-sm">닫기 ×</button>
         </div>
         <AdminDashboard
+          dashboardTarget={dashboardTarget}
+          riskSource={dataSource}
+          onSessionChange={handleSessionChange}
           reports={publicReports}
           risks={risks}
           onFocusLocation={focusReportLocation}
           onReviewCompleted={handleReviewCompleted}
           onAdminReportsChange={setAdminReports}
-          onAuthorizedChange={(value) => { setAdminAuthorized(value); if (value) setShowAdminPanel(true); }}
+          onAuthorizedChange={(value) => {
+            setAdminAuthorized(value);
+            setShowAdminPanel(false);
+            if (value) {
+              setShowDashboard(true);
+              setAnalysisTab("reports");
+            } else {
+              setShowDashboard(false);
+              setDashboardTarget(null);
+            }
+          }}
           logoutSignal={logoutSignal}
         />
       </aside>
@@ -203,6 +261,9 @@ export default function B2GDashboard() {
           routes={[]}
           risks={risks}
           cleanlinessEdges={cleanEdges}
+          dbscanSites={dbscanSites}
+          showDbscanSites={adminAuthorized && analysisTab === "dbscan" && dbscanSites !== null}
+          selectedDbscanCluster={selectedDbscanCluster}
           reports={visibleReports}
           showRisks={showRisks}
           showReports={showReports}
@@ -217,114 +278,53 @@ export default function B2GDashboard() {
         />
 
         {showRisks && cleanEdges.length > 0 && <CleanlinessLegend scope="network" />}
-        {/* Independent collapsible B2G analysis dashboard */}
-              <button type="button" onClick={() => setShowDashboard(value => !value)}
-                aria-expanded={showDashboard}
-                className="absolute top-3 left-3 z-[1050] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-bold text-slate-700 shadow-lg">
-                {showDashboard ? "지자체 분석 대시보드 닫기 ×" : "지자체 분석 대시보드 ☰"}
-              </button>
-        
+        {/* Administrator-only local-government analytics entry. */}
+        {adminAuthorized && (
+          <button type="button" onClick={() => setShowDashboard(value => !value)}
+            aria-expanded={showDashboard}
+            className="absolute left-3 top-3 z-[1050] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-bold text-slate-700 shadow-lg">
+            {showDashboard ? "지자체 분석 닫기 ×" : "지자체 분석 ☰"}
+          </button>
+        )}
       </main>
 
-      {showDashboard && (
-      <section className="z-[1000] max-h-[55dvh] space-y-4 overflow-y-auto bg-white p-4 pb-16 shadow-lg">
-        <div>
-          <h2 className="text-lg font-bold text-slate-800">
-            지자체 분석 대시보드
-          </h2>
-
-          <p className="mt-1 text-xs text-gray-500">
-            위험지역, 신고 데이터 및 분석 결과
-          </p>
-        </div>
-
-        {/* 현재 데이터 현황 */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl border p-4">
-            <p className="text-xs text-gray-500">
-              지도에 표시할 신고
-            </p>
-
-            <p className="mt-2 text-2xl font-bold text-slate-800">
-              {visibleReports.length}
-              <span className="ml-1 text-sm font-normal">
-                건
-              </span>
-            </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              {adminReports
-                ? "관리자 전체 신고 기준"
-                : "승인된 공개 신고 기준"}
+      {adminAuthorized && showDashboard && (
+        <section aria-label="지자체 분석"
+          className="z-[1000] max-h-[55dvh] space-y-4 overflow-y-auto bg-white p-4 pb-16 shadow-lg">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">지자체 분석</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              관리자 제보 검토와 흡연시설 입지 추천을 별도로 확인합니다.
             </p>
           </div>
-
-          <div className="rounded-xl border p-4">
-            <p className="text-xs text-gray-500">
-              위험 지점 데이터
-            </p>
-
-            <p className="mt-2 text-2xl font-bold text-slate-800">
-              {risks.length}
-              <span className="ml-1 text-sm font-normal">
-                개
-              </span>
-            </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              {dataSource === "model-csv" ? "실제 모델 위험점수 기반" : "AI 모델 연결 안 됨"}
-            </p>
+          <div role="tablist" aria-label="지자체 분석 메뉴" className="flex gap-2">
+            <button type="button" role="tab" aria-selected={analysisTab === "reports"}
+              onClick={() => selectAnalysisTab("reports")}
+              className={`rounded-lg px-4 py-2 text-sm font-bold ${analysisTab === "reports" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-700"}`}>
+              관리자 대시보드
+            </button>
+            <button type="button" role="tab" aria-selected={analysisTab === "dbscan"}
+              onClick={() => selectAnalysisTab("dbscan")}
+              className={`rounded-lg px-4 py-2 text-sm font-bold ${analysisTab === "dbscan" ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-700"}`}>
+              DBSCAN 입지 추천
+            </button>
           </div>
-        </div>
-
-        {loading && (
-          <p className="text-sm text-gray-500">
-            지도 데이터를 불러오는 중...
-          </p>
-        )}
-
-        {error && (
-          <p
-            role="alert"
-            className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
-          >
-            {error}
-          </p>
-        )}
-
-        {/* DBSCAN: 실제 결과 연결 전 */}
-        <div className="rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="font-bold text-slate-800">
-              DBSCAN 군집 분석
-            </h3>
-
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
-              연동 준비
-            </span>
-          </div>
-
-          <p className="mt-3 text-sm text-gray-600">
-            현재 DBSCAN 분석 결과 API는
-            연결되지 않았습니다.
-          </p>
-
-          <p className="mt-2 text-xs leading-6 text-gray-500">
-            향후 군집별 신고 건수, 군집 중심,
-            공간적 분포, 노이즈 지점 및
-            밀집지역 분석 결과를 이 영역과
-            지도에 표시할 예정입니다.
-          </p>
-        </div>
-
-        <p className="text-xs leading-5 text-gray-500">
-          관리자 로그인 전에는 승인된 공개 신고만
-          지도에 표시됩니다. 로그인 후에는
-          관리자 권한으로 조회한 신고 전체를
-          표시합니다. 청정지수는 위험점수 기반 파생값이며
-          DBSCAN 분석은 아직 연결되지 않았습니다.
-        </p>
-      </section>
+          {analysisTab === "reports" ? (
+            <div role="tabpanel" aria-label="관리자 대시보드" ref={setDashboardTarget} />
+          ) : (
+            <div role="tabpanel" aria-label="DBSCAN 입지 추천">
+              <DbscanSitePanel
+                data={dbscanSites}
+                loading={dbscanLoading}
+                error={dbscanError}
+                selectedCluster={selectedDbscanCluster}
+                onClusterChange={setSelectedDbscanCluster}
+                onFocus={focusDbscanCandidate}
+                onReload={() => void loadDbscanSites()}
+              />
+            </div>
+          )}
+        </section>
       )}
     </div>
   );

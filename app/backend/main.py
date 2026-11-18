@@ -24,6 +24,7 @@ from walking_router import (
 
 from safe_router import calculate_safest_route
 from b2g_cleanliness import edge_cleanliness_geojson
+from dbscan_sites import load_dbscan_sites
 from risk_provider import get_risk_snapshot
 from smoking_zones import load_smoking_zones
 from address_lookup import reverse_address
@@ -311,6 +312,15 @@ def smoking_zones():
 @app.get("/api/risks")
 def get_risks(request: Request):
     return request.app.state.risk_snapshot["locations"]
+
+
+@app.get("/api/b2g/dbscan/sites")
+def get_b2g_dbscan_sites(admin_username: str = Depends(require_admin)):
+    """Return existing DBSCAN CSV outputs only; never synthesize site suggestions."""
+    try:
+        return load_dbscan_sites()
+    except (ValueError, FileNotFoundError) as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 @app.get("/api/b2g/cleanliness/edges")

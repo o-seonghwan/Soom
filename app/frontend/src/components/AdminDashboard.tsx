@@ -1,5 +1,6 @@
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import type { Coordinate } from "../types/route";
 import type { RiskLocation } from "../types/risk";
@@ -27,6 +28,9 @@ interface AdminDashboardProps {
     reports: Report[] | null
   ) => void;
   onAuthorizedChange?: (authorized: boolean) => void;
+  onSessionChange?: (authorizationHeader: string | null) => void;
+  dashboardTarget?: HTMLElement | null;
+  riskSource?: "model-csv" | null;
   logoutSignal?: number;
 }
 
@@ -85,6 +89,9 @@ export default function AdminDashboard({
   onReviewCompleted,
   onAdminReportsChange,
   onAuthorizedChange,
+  onSessionChange,
+  dashboardTarget = null,
+  riskSource = null,
   logoutSignal = 0,
 }: AdminDashboardProps) {
   const [username, setUsername] = useState("");
@@ -188,6 +195,7 @@ export default function AdminDashboard({
 
       setAuthorized(true);
       onAuthorizedChange?.(true);
+      onSessionChange?.(makeAuthHeader(username, password));
       setMessage(
         "관리자 로그인이 완료되었습니다."
       );
@@ -197,6 +205,7 @@ export default function AdminDashboard({
     } catch (err) {
       setAuthorized(false);
       onAuthorizedChange?.(false);
+      onSessionChange?.(null);
       setAdminReports([]);
       onAdminReportsChange?.(null);
 
@@ -213,6 +222,7 @@ export default function AdminDashboard({
   // 관리자 로그아웃
   function handleLogout() {
     onAuthorizedChange?.(false);
+    onSessionChange?.(null);
     setAuthorized(false);
     setUsername("");
     setPassword("");
@@ -482,7 +492,7 @@ export default function AdminDashboard({
         report.status === "rejected"
     ).length;
 
-  return (
+  const dashboard = (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -523,6 +533,28 @@ export default function AdminDashboard({
           </button>
         </div>
       </div>
+
+      {/* Match the actual B2G report marker fill/stroke colors in MapView. */}
+      <section aria-label="지도 제보 마커 범례" className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <h3 className="text-sm font-bold text-slate-800">지도 아이콘 안내 · 제보 상태</h3>
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-700">
+          {[
+            { label: "검토 대기", fill: "#fbbf24", stroke: "#b45309" },
+            { label: "승인", fill: "#22c55e", stroke: "#15803d" },
+            { label: "반려", fill: "#94a3b8", stroke: "#475569" },
+          ].map(item => (
+            <span key={item.label} className="inline-flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2"
+                style={{ backgroundColor: item.fill, borderColor: item.stroke }} />
+              {item.label}
+            </span>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] leading-4 text-slate-500">
+          지도 원형 마커의 색상은 제보 처리 상태를 뜻합니다. 제보 종류와 상세 내용은 마커를 선택해 확인하세요.
+          지도에서 제보 표시를 끄면 마커도 숨겨집니다.
+        </p>
+      </section>
 
       {/* 상태별 신고 통계 */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -570,8 +602,8 @@ export default function AdminDashboard({
         </p>
 
         <p className="mt-1 text-xs text-gray-500">
-          현재 위험도는 Mock 데이터이며,
-          승인된 제보도 A*에 자동 반영되지 않습니다.
+          {riskSource === "model-csv" ? "AI 모델 CSV 기반 위험도입니다." : "AI 모델 데이터가 연결되지 않았습니다."}
+          승인된 제보는 A* 경로 계산에 자동 반영되지 않습니다.
         </p>
       </div>
 
@@ -737,4 +769,7 @@ export default function AdminDashboard({
       </p>
     </div>
   );
+  // Keep auth state and review actions mounted, but show their dashboard
+  // exclusively inside the authenticated local-government analysis tab.
+  return dashboardTarget ? createPortal(dashboard, dashboardTarget) : null;
 }
