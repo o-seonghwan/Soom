@@ -22,6 +22,13 @@ export interface Route {
   // 지도에 표시할 경로 좌표
   coordinates: Coordinate[];
 
+  // The actual A* walking-link geometry with its model cleanliness score.
+  // null means that this link has no model score and must not be assigned one.
+  segments?: {
+    coordinates: Coordinate[];
+    cleanIndex: number | null;
+  }[];
+
   // 보행 링크에 연결된 실제 시작·끝 지점
   snappedStart?: Coordinate;
   snappedEnd?: Coordinate;

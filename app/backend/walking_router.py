@@ -307,6 +307,8 @@ def create_partial_edge(
         to_node,
         length=partial_length,
         geometry=partial_geometry,
+        # Resolve the model score for a partial link from its original link.
+        source_edge=edge_info["edge"],
     )
 
 
@@ -412,10 +414,22 @@ def connect_virtual_nodes(graph, start_snap, end_snap):
 # 7. A* 경로를 지도 좌표로 변환
 # =====================================================
 
+def link_clean_index(edge_risks, u, v, key, edge_data):
+    """The model score belongs to the exact directed walking link."""
+    if not edge_risks:
+        return None
+    source = edge_data.get("source_edge", (u, v, key))
+    risk = edge_risks.get(tuple(source))
+    if risk is None or risk.get("cleanIndex") is None:
+        return None
+    return round(float(risk["cleanIndex"]), 2)
+
+
 def route_to_coordinates(
     graph,
     route_nodes,
     to_wgs84,
+    edge_risks=None,
 ):
     """
     계산된 A* 노드 목록을
@@ -424,6 +438,7 @@ def route_to_coordinates(
 
     coordinates = []
     total_distance = 0.0
+    segments = []
 
     if len(route_nodes) == 1:
         node = graph.nodes[route_nodes[0]]
@@ -431,7 +446,7 @@ def route_to_coordinates(
             node["x"],
             node["y"],
         )
-        return [[lat, lon]], 0.0
+        return [[lat, lon]], 0.0, segments
 
     for u, v in zip(
         route_nodes[:-1],
@@ -462,6 +477,12 @@ def route_to_coordinates(
             lon, lat = to_wgs84.transform(x, y)
             segment.append([lat, lon])
 
+        # Keep each original edge geometry separate for correct color boundaries.
+        segments.append({
+            "coordinates": segment,
+            "cleanIndex": link_clean_index(edge_risks, u, v, key, edge),
+        })
+
         # 중복되는 경로 연결점 제거
         if coordinates and segment:
             last = coordinates[-1]
@@ -475,14 +496,14 @@ def route_to_coordinates(
 
         coordinates.extend(segment)
 
-    return coordinates, total_distance
+    return coordinates, total_distance, segments
 
 
 # =====================================================
 # 8. A* 일반 최단경로 계산
 # =====================================================
 
-def calculate_shortest_route(graph, start, end):
+def calculate_shortest_route(graph, start, end, edge_risks=None):
     """
     강남구 보행 링크 기반 A* 최단경로.
 
@@ -533,10 +554,11 @@ def calculate_shortest_route(graph, start, end):
     )
 
     # 5. 노드 경로 -> 실제 보행 링크 선형 변환
-    coordinates, total_distance = route_to_coordinates(
+    coordinates, total_distance, segments = route_to_coordinates(
         route_graph,
         route_nodes,
         to_wgs84,
+        edge_risks,
     )
 
     # 6. 접속점 좌표 반환
@@ -564,6 +586,7 @@ def calculate_shortest_route(graph, start, end):
             1,
         ),
         "coordinates": coordinates,
+        "segments": segments,
 
         # 원래 클릭 위치가 아닌 실제 링크 접속점
         "snappedStart": [start_lat, start_lon],

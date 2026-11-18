@@ -39,6 +39,7 @@ export default function App() {
               <h2 className="mt-4 text-2xl font-bold text-gray-900">
                 청정 경로 찾기
               </h2>
+              <p className="mt-2 text-sm font-semibold text-green-700">숨편하게, 맘편하게</p>
 
               <p className="mt-4 text-sm leading-7 text-gray-600">
                 간접흡연 위험을 고려한 보행 경로를
@@ -64,6 +65,7 @@ export default function App() {
               <h2 className="mt-4 text-2xl font-bold text-gray-900">
                 흡연 위험 현황 분석
               </h2>
+              <p className="mt-2 text-sm font-semibold text-slate-600">간편하게</p>
 
               <p className="mt-4 text-sm leading-7 text-gray-600">
                 신고 현황을 검토하고,
