@@ -218,7 +218,6 @@ export default function MapView({
   routes,
   selectedRouteId = "safest",
   fitBoundsRoutes = routes,
-  risks,
   cleanlinessEdges,
   reports,
   showRisks,
