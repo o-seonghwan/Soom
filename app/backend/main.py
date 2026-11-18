@@ -315,7 +315,7 @@ def get_risks(request: Request):
 
 
 @app.get("/api/b2g/dbscan/sites")
-def get_b2g_dbscan_sites():
+def get_b2g_dbscan_sites(admin_username: str = Depends(require_admin)):
     """Return existing DBSCAN CSV outputs only; never synthesize site suggestions."""
     try:
         return load_dbscan_sites()
