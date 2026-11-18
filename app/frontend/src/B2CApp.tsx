@@ -218,6 +218,32 @@ export default function App() {
   const [routes, setRoutes] =
     useState<Route[]>([]);
 
+  // Show the interpretation notice briefly after an explicit route search.
+  // The information button remains available above Leaflet's zoom controls.
+  const [showRiskNotice, setShowRiskNotice] = useState(false);
+  const riskNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function cancelRiskNoticeTimer() {
+    if (riskNoticeTimer.current !== null) {
+      window.clearTimeout(riskNoticeTimer.current);
+      riskNoticeTimer.current = null;
+    }
+  }
+
+  function showTimedRiskNotice() {
+    cancelRiskNoticeTimer();
+    setShowRiskNotice(true);
+    riskNoticeTimer.current = window.setTimeout(() => {
+      setShowRiskNotice(false);
+      riskNoticeTimer.current = null;
+    }, 7000);
+  }
+
+  function toggleRiskNotice() {
+    cancelRiskNoticeTimer();
+    setShowRiskNotice(value => !value);
+  }
+
   // Only explicit route searches should zoom/pan to route bounds.
   // Slider-driven recalculation updates the lines without changing the viewport.
   const [fitBoundsRoutes, setFitBoundsRoutes] = useState<Route[]>([]);
@@ -240,6 +266,7 @@ export default function App() {
 
   useEffect(() => {
     return () => {
+      cancelRiskNoticeTimer();
       if (avoidanceSearchTimer.current !== null) window.clearTimeout(avoidanceSearchTimer.current);
       routeRequestSequence.current += 1;
       routeRequestController.current?.abort();
@@ -524,6 +551,10 @@ export default function App() {
     searchInProgress.current = true;
     searchStartTime.current = performance.now();
 
+    if (!auto) {
+      cancelRiskNoticeTimer();
+      setShowRiskNotice(false);
+    }
     setElapsedSeconds(0);
     setSearchStatus("idle");
     setLoading(true);
@@ -541,6 +572,7 @@ export default function App() {
         // Show route tabs immediately, with avoidance selected initially.
         setShowControls(true);
         setPageMode("safest");
+        showTimedRiskNotice();
       }
     } catch (error) {
       if (controller.signal.aborted || sequence !== routeRequestSequence.current) return;
@@ -714,6 +746,33 @@ export default function App() {
         />
 
         {routes.length > 0 && <CleanlinessLegend scope="route" />}
+        {/* Persistent information icon, directly above Leaflet's bottom-right zoom control. */}
+        <button type="button"
+          onClick={toggleRiskNotice}
+          aria-label="위험지수 이용 안내"
+          aria-expanded={showRiskNotice}
+          title="위험지수 이용 안내"
+          className="absolute bottom-[84px] right-3 z-[800] flex h-[34px] w-[34px] items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-base font-bold text-slate-700 shadow-lg hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900">
+          <span aria-hidden="true">ⓘ</span>
+        </button>
+        {showRiskNotice && (
+          <section role="status" aria-label="위험지수 이용 안내"
+            className="absolute bottom-[132px] right-3 z-[800] w-[min(340px,calc(100%-24px))] rounded-xl border border-amber-300 bg-amber-50/95 p-3 text-xs leading-5 text-amber-950 shadow-xl">
+            <div className="flex items-start justify-between gap-2">
+              <strong className="text-sm">위험지수 이용 안내</strong>
+              <button type="button" onClick={() => { cancelRiskNoticeTimer(); setShowRiskNotice(false); }}
+                aria-label="위험지수 안내 닫기" className="rounded px-1 text-base font-bold">×</button>
+            </div>
+            <p className="mt-2">
+              이 지도는 보행 환경의 간접흡연 노출 가능성을 예측한 것으로,
+              특정 상점이나 건물의 흡연 발생 여부 또는 책임을 평가하지 않습니다.
+            </p>
+            <p className="mt-1">
+              위험지수는 위치와 주변 환경에 따른 상대적 참고 정보이며,
+              실제 현장 상황과 다를 수 있습니다.
+            </p>
+          </section>
+        )}
         <button type="button" onClick={() => setShowControls(value => !value)}
           aria-expanded={showControls}
           className="absolute left-3 top-[124px] max-[760px]:top-[224px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
