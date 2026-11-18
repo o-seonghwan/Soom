@@ -5,7 +5,7 @@ import MapView from "./components/MapView";
 import AdminDashboard from "./components/AdminDashboard";
 import { getB2GCleanEdges } from "./services/cleanlinessService";
 import type { CleanEdgeFeature } from "./types/cleanliness";
-import { getCleanColor } from "./utils/cleanColor";
+import CleanlinessLegend from "./components/CleanlinessLegend";
 
 import { getReports } from "./services/reportService";
 import { getRisks } from "./services/riskService";
@@ -216,24 +216,7 @@ export default function B2GDashboard() {
           }}
         />
 
-        {showRisks && cleanEdges.length > 0 && (
-          <div className="absolute bottom-14 left-3 z-[500] rounded-xl bg-white/95 p-3 shadow-lg">
-            <h3 className="text-sm font-bold">보행로 청정지수 · AI 모델</h3>
-            <div className="mt-2 flex gap-2 text-xs">
-              {[{n: 10,t: "0–19"}, {n: 30,t: "20–39"}, {n: 50,t: "40–59"}, {n: 70,t: "60–79"}, {n: 90,t: "80–100"}].map(({n,t}) => (
-                <div key={n} className="flex flex-col items-center gap-1">
-                  <span className="h-3 w-8 rounded" style={{background: getCleanColor(n)}}/>
-                  <span>{t}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-2 flex items-center gap-1.5 text-[10px] text-gray-600">
-              <span className="h-3 w-8 rounded bg-[#64748b] opacity-40" aria-hidden="true" />
-              <span>회색: 모델 점수 없음</span>
-            </div>
-            <p className="mt-2 max-w-72 text-[10px] text-gray-600">높을수록 상대적으로 청정 · 회색은 안전 판정이 아닌 미측정 구간 · 실측 대기질이 아님</p>
-          </div>
-        )}
+        {showRisks && cleanEdges.length > 0 && <CleanlinessLegend scope="network" />}
         {/* Independent collapsible B2G analysis dashboard */}
               <button type="button" onClick={() => setShowDashboard(value => !value)}
                 aria-expanded={showDashboard}
