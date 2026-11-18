@@ -268,6 +268,7 @@ def compare_routes(
             graph=graph,
             start=request.start,
             end=request.end,
+            edge_risks=edge_risks,
         )
 
         safest = calculate_safest_route(
