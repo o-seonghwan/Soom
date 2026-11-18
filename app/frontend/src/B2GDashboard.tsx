@@ -228,6 +228,17 @@ export default function B2GDashboard() {
           <button type="button" onClick={() => setShowAdminPanel(false)}
             aria-label="관리자 창 닫기" className="rounded-lg border px-3 py-1 text-sm">닫기 ×</button>
         </div>
+        {adminAuthorized && (
+          <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <p className="font-bold">관리자 로그인 완료</p>
+            <p className="mt-1 text-xs">지자체 분석 패널에서 관리자 대시보드와 DBSCAN 입지 추천을 이용할 수 있습니다.</p>
+            <button type="button"
+              onClick={() => { setShowDashboard(true); setShowAdminPanel(false); }}
+              className="mt-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">
+              지자체 분석 보기
+            </button>
+          </div>
+        )}
         <AdminDashboard
           dashboardTarget={dashboardTarget}
           riskSource={dataSource}
@@ -239,11 +250,14 @@ export default function B2GDashboard() {
           onAdminReportsChange={setAdminReports}
           onAuthorizedChange={(value) => {
             setAdminAuthorized(value);
-            setShowAdminPanel(false);
             if (value) {
+              // Enter submits the login form; successful authentication must not
+              // unexpectedly dismiss the dialog. The user closes it explicitly.
+              setShowAdminPanel(true);
               setShowDashboard(true);
               setAnalysisTab("reports");
             } else {
+              setShowAdminPanel(false);
               setShowDashboard(false);
               setDashboardTarget(null);
             }
@@ -286,11 +300,9 @@ export default function B2GDashboard() {
             {showDashboard ? "지자체 분석 닫기 ×" : "지자체 분석 ☰"}
           </button>
         )}
-      </main>
-
-      {adminAuthorized && showDashboard && (
+        {adminAuthorized && showDashboard && (
         <section aria-label="지자체 분석"
-          className="z-[1000] max-h-[55dvh] space-y-4 overflow-y-auto bg-white p-4 pb-16 shadow-lg">
+          className="absolute left-3 top-[64px] z-[1000] max-h-[min(66dvh,calc(100%-80px))] w-[min(420px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
           <div>
             <h2 className="text-lg font-bold text-slate-800">지자체 분석</h2>
             <p className="mt-1 text-xs text-slate-500">
@@ -323,9 +335,12 @@ export default function B2GDashboard() {
                 onReload={() => void loadDbscanSites()}
               />
             </div>
-          )}
+            )}
         </section>
       )}
+      </main>
+
+
     </div>
   );
 }
