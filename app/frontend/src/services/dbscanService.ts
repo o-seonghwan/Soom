@@ -2,8 +2,11 @@ import type { DbscanSitesResponse } from "../types/dbscan";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
-export async function getDbscanSites(): Promise<DbscanSitesResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/b2g/dbscan/sites`);
+export async function getDbscanSites(authHeader: string): Promise<DbscanSitesResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/b2g/dbscan/sites`, {
+    headers: { Authorization: authHeader },
+    cache: "no-store",
+  });
   if (!response.ok) {
     let detail = "분석 결과 CSV를 확인하세요.";
     try {
