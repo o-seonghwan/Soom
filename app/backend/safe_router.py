@@ -15,6 +15,7 @@ from walking_router import (
     get_nearest_edge,
     get_edge_line,
     connect_virtual_nodes,
+    link_clean_index,
 )
 
 
@@ -172,6 +173,7 @@ def build_route_result(
     """
 
     coordinates = []
+    segments = []
     total_distance = 0.0
 
     for u, v in zip(
@@ -213,6 +215,11 @@ def build_route_result(
             )
             segment.append([lat, lon])
 
+        segments.append({
+            "coordinates": segment,
+            "cleanIndex": link_clean_index(edge_risks, u, v, key, edge_data),
+        })
+
         if coordinates and segment:
             last = coordinates[-1]
             first = segment[0]
@@ -225,7 +232,7 @@ def build_route_result(
 
         coordinates.extend(segment)
 
-    return coordinates, total_distance
+    return coordinates, total_distance, segments
 
 
 # =====================================================
@@ -329,7 +336,7 @@ def calculate_safest_route(
     )
 
     # 8. 실제 보행 링크 경로 좌표 생성
-    coordinates, total_distance = build_route_result(
+    coordinates, total_distance, segments = build_route_result(
         route_graph,
         route_nodes,
         to_wgs84,
@@ -362,6 +369,7 @@ def calculate_safest_route(
             estimated_minutes, 1
         ),
         "coordinates": coordinates,
+        "segments": segments,
         "snappedStart": [
             start_lat,
             start_lon,
