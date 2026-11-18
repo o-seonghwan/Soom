@@ -92,6 +92,13 @@ export default function DbscanSitePanel({
             </div>
           )}
 
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+            {data.disclaimer} 위 거리·영역 판정에는 분석용 근사와 가정이 포함됩니다.
+            실제 법적 설치 가능 여부, 보도 폭, 건물 출입구, 소유권과 민원 등은
+            지자체 현장 조사와 최신 규정 확인이 필요합니다.
+          </p>
+        </>
+      )}
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <h4 className="font-bold text-slate-900">후보 지점은 어떻게 선정하나요?</h4>
             <p className="mt-2 text-sm leading-6 text-slate-700">
@@ -136,13 +143,6 @@ export default function DbscanSitePanel({
               대상으로 남습니다.
             </p>
           </div>
-          <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-            {data.disclaimer} 위 거리·영역 판정에는 분석용 근사와 가정이 포함됩니다.
-            실제 법적 설치 가능 여부, 보도 폭, 건물 출입구, 소유권과 민원 등은
-            지자체 현장 조사와 최신 규정 확인이 필요합니다.
-          </p>
-        </>
-      )}
     </section>
   );
 }
