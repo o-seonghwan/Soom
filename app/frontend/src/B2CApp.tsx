@@ -18,7 +18,7 @@ import type {
 } from "./types/report";
 
 import { getRoutes } from "./services/routeService";
-import { getCleanColor } from "./utils/cleanColor";
+import CleanlinessLegend from "./components/CleanlinessLegend";
 import {
   getReports,
   createReport,
@@ -713,27 +713,7 @@ export default function App() {
           onMapClick={handleMapClick}
         />
 
-        {routes.length > 0 && (
-          <div className="absolute bottom-3 left-3 z-[500] rounded-xl bg-white/95 p-3 text-xs shadow-lg">
-            <p className="font-bold text-slate-800">선택 경로 · 보행 링크 청정지수</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-600">
-              {[
-                {value: 10, label: "0–19"},
-                {value: 30, label: "20–39"},
-                {value: 50, label: "40–59"},
-                {value: 70, label: "60–79"},
-                {value: 90, label: "80–100"},
-              ].map(({value, label}) => (
-                <span key={value} className="inline-flex items-center gap-1">
-                  <span className="h-2.5 w-4 rounded" style={{background: getCleanColor(value)}} />
-                  {label}
-                </span>
-              ))}
-              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-4 rounded bg-slate-400" />미선택/점수 없음</span>
-            </div>
-            <p className="mt-2 text-[10px] text-slate-500">예측 모델 기반 · 실측 대기질 아님 · 선택 경로에만 적용</p>
-          </div>
-        )}
+        {routes.length > 0 && <CleanlinessLegend scope="route" />}
         <button type="button" onClick={() => setShowControls(value => !value)}
           aria-expanded={showControls}
           className="absolute left-3 top-[124px] max-[760px]:top-[224px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
