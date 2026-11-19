@@ -45,12 +45,6 @@ export default function CleanlinessLegend({ scope }: CleanlinessLegendProps) {
           <span className="h-2.5 w-4 rounded bg-[#64748b]" />
           회색: 위험지수 미산정 구간
         </span>
-        {scope === "route" && (
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2.5 w-4 rounded bg-[#94a3b8]" />
-            미선택 경로
-          </span>
-        )}
       </div>
       <p className="mt-2 text-[10px] leading-4 text-slate-500">
         청정지수가 높을수록 상대적으로 청정 · 미산정은 안전 판정이 아님
