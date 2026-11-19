@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { Coordinate } from "../types/route";
 import { suggestAddresses, type AddressSuggestion } from "../services/addressSearchService";
 
@@ -86,7 +86,7 @@ export default function MapRouteCard({
     await onApplyText(mode);
   }
 
-  function onKeyDown(mode: LocationMode, event: React.KeyboardEvent<HTMLInputElement>) {
+  function onKeyDown(mode: LocationMode, event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Escape") {
       setActiveMode(null);
       return;
