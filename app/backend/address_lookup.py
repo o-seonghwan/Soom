@@ -50,3 +50,97 @@ def _cached_vworld(lat: float, lng: float, key: str) -> dict:
     if parcel:
         return {"address": parcel, "source": "vworld-parcel"}
     return {"address": None, "source": "vworld-empty"}
+
+
+VWORLD_SEARCH_URL = "https://api.vworld.kr/req/search"
+
+
+def search_addresses(query: str) -> list[dict]:
+    """Suggest matching addresses and places using VWorld Search 2.0."""
+    query = query.strip()
+    if len(query) < 2:
+        return []
+    if len(query) > 120:
+        raise ValueError("검색어는 최대 120자입니다.")
+    key = os.environ.get("VWORLD_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("주소 검색을 사용하려면 서버의 VWORLD_API_KEY 설정이 필요합니다.")
+
+    suggestions = []
+    seen = set()
+    for search_type, category in (("address", "road"), ("address", "parcel"), ("place", None)):
+        params = {
+            "service": "search", "request": "search", "version": "2.0",
+            "crs": "EPSG:4326", "type": search_type, "query": query,
+            "format": "json", "size": 8, "page": 1, "key": key,
+        }
+        if category:
+            params["category"] = category
+        response = requests.get(VWORLD_SEARCH_URL, params=params, timeout=6)
+        response.raise_for_status()
+        body = response.json().get("response", {})
+        status = body.get("status")
+        if status == "NOT_FOUND":
+            continue
+        if status != "OK":
+            raise requests.RequestException(f"VWorld 주소 검색 응답 상태 {status}")
+        for item in (body.get("result") or {}).get("items") or []:
+            point = item.get("point") or {}
+            try:
+                lat, lng = float(point["y"]), float(point["x"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            if not (math.isfinite(lat) and math.isfinite(lng) and 37 <= lat <= 38 and 126 <= lng <= 128):
+                continue
+            address = item.get("address") or {}
+            road = address.get("road") or ""
+            parcel = address.get("parcel") or ""
+            title = (item.get("title") or road or parcel or "").strip()
+            label = road or parcel or title
+            dedup = (round(lat, 6), round(lng, 6), label)
+            if not label or dedup in seen:
+                continue
+            seen.add(dedup)
+            suggestions.append({
+                "id": str(len(suggestions) + 1),
+                "title": title,
+                "address": label,
+                "lat": lat, "lng": lng,
+                "kind": "장소" if search_type == "place" else "도로명" if category == "road" else "지번",
+            })
+            if len(suggestions) >= 10:
+                return suggestions
+    return suggestions
+
+
+def forward_address(address: str) -> dict:
+    """Resolve an exact road/parcel address, without exposing VWorld API key."""
+    address = address.strip()
+    if not (2 <= len(address) <= 200):
+        raise ValueError("주소는 2~200자로 입력하세요.")
+    key = os.environ.get("VWORLD_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("주소 검색을 사용하려면 서버의 VWORLD_API_KEY 설정이 필요합니다.")
+    for kind in ("ROAD", "PARCEL"):
+        response = requests.get(
+            VWORLD_URL,
+            params={"service": "address", "request": "getcoord", "version": "2.0",
+                    "crs": "EPSG:4326", "address": address, "type": kind,
+                    "format": "json", "key": key},
+            timeout=6,
+        )
+        response.raise_for_status()
+        body = response.json().get("response", {})
+        if body.get("status") == "NOT_FOUND":
+            continue
+        if body.get("status") != "OK":
+            raise requests.RequestException(f"VWorld 주소 변환 응답 상태 {body.get('status')}")
+        point = (body.get("result") or {}).get("point") or {}
+        try:
+            lat, lng = float(point["y"]), float(point["x"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("주소 좌표 변환에 실패했습니다.") from exc
+        if not (math.isfinite(lat) and math.isfinite(lng) and 37 <= lat <= 38 and 126 <= lng <= 128):
+            raise ValueError("입력한 주소가 현재 서비스 지역인 서울권 밖에 있습니다.")
+        return {"lat": lat, "lng": lng, "address": address}
+    raise LookupError("일치하는 도로명·지번 주소를 찾지 못했습니다. 연관검색어 또는 지도를 사용하세요.")
