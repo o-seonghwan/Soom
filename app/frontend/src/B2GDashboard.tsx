@@ -49,6 +49,7 @@ export default function B2GDashboard() {
   const [childcareData, setChildcareData] = useState<ChildcareExposureResponse | null>(null);
   const [childcareLoading, setChildcareLoading] = useState(false);
   const [childcareError, setChildcareError] = useState("");
+  const [selectedChildcare, setSelectedChildcare] = useState<ChildcareExposure | null>(null);
   const [dbscanLoading, setDbscanLoading] = useState(false);
   const [dbscanError, setDbscanError] = useState("");
   const [selectedDbscanCluster, setSelectedDbscanCluster] = useState<string | null>(null);
@@ -74,6 +75,7 @@ export default function B2GDashboard() {
       setChildcareData(null);
       setChildcareLoading(false);
       setChildcareError("");
+      setSelectedChildcare(null);
       setDbscanError("");
       setDbscanLoading(false);
       setSelectedDbscanCluster(null);
@@ -129,11 +131,13 @@ export default function B2GDashboard() {
 
   function selectAnalysisTab(tab: "reports" | "dbscan" | "childcare") {
     setAnalysisTab(tab);
+    if (tab !== "childcare") setSelectedChildcare(null);
     if (tab === "dbscan" && !dbscanSites && !dbscanLoading) void loadDbscanSites();
     if (tab === "childcare" && !childcareData && !childcareLoading) void loadChildcareExposure();
   }
 
   function focusChildcare(nursery: ChildcareExposure) {
+    setSelectedChildcare(nursery);
     setFocusPoint([nursery.lat, nursery.lng]);
     setShowDashboard(false);
   }
@@ -323,6 +327,7 @@ export default function B2GDashboard() {
           dbscanSites={dbscanSites}
           showDbscanSites={adminAuthorized && analysisTab === "dbscan" && dbscanSites !== null}
           selectedDbscanCluster={selectedDbscanCluster ?? ""}
+          selectedChildcare={adminAuthorized && analysisTab === "childcare" ? selectedChildcare : null}
           reports={visibleReports}
           showRisks={showRisks}
           showReports={showReports}
