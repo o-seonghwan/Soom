@@ -815,7 +815,7 @@ export default function App() {
           endAddress={endAddress}
           routeLoading={loading}
           onSearch={() => void handleSearch()}
-          onSelectLocation={setSelectionMode}
+          onSelectLocation={mode => { if (pageMode === "report") setPageMode("safest"); setSelectionMode(mode); }}
           startInputText={startText}
           endInputText={endText}
           onAddressTextChange={handleAddressTextChange}
