@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import type { Coordinate } from "../types/route";
 import { suggestAddresses, type AddressSuggestion } from "../services/addressSearchService";
 
@@ -29,6 +30,8 @@ export default function MapRouteCard({
   const [lookupError, setLookupError] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownRect, setDropdownRect] = useState({ top: 0, left: 0, width: 0 });
   const requestSeq = useRef(0);
   const query = activeMode === "start" ? startText : activeMode === "end" ? endText : "";
 
@@ -65,9 +68,32 @@ export default function MapRouteCard({
     };
   }, [activeMode, query]);
 
+  // Render suggestions outside the map stacking context so the floating
+  // results/report control can never cover them.
+  useEffect(() => {
+    if (!activeMode) return;
+    function placeDropdown() {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setDropdownRect({
+        top: rect.bottom + 4,
+        left: rect.left + 12,
+        width: Math.max(180, rect.width - 24),
+      });
+    }
+    placeDropdown();
+    window.addEventListener("resize", placeDropdown);
+    window.addEventListener("scroll", placeDropdown, true);
+    return () => {
+      window.removeEventListener("resize", placeDropdown);
+      window.removeEventListener("scroll", placeDropdown, true);
+    };
+  }, [activeMode]);
+
   useEffect(() => {
     function handleOutside(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setActiveMode(null);
+      if (rootRef.current && !rootRef.current.contains(event.target as Node) &&
+          !dropdownRef.current?.contains(event.target as Node)) setActiveMode(null);
     }
     document.addEventListener("mousedown", handleOutside);
     return () => document.removeEventListener("mousedown", handleOutside);
@@ -159,9 +185,10 @@ export default function MapRouteCard({
           </button>
         </div>
       </div>
-      {activeMode && (
-        <div role="listbox" aria-label={activeMode === "start" ? "출발지 연관 주소" : "목적지 연관 주소"}
-          className="absolute left-3 right-3 top-[calc(100%+4px)] z-[1100] max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-2xl">
+      {activeMode && createPortal(
+        <div ref={dropdownRef} role="listbox" aria-label={activeMode === "start" ? "출발지 연관 주소" : "목적지 연관 주소"}
+          style={{ top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width }}
+          className="fixed z-[2000] max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-2xl">
           {query.trim().length < 2 ? (
             <p className="p-3 text-xs text-slate-600">도로명 주소나 장소명을 두 글자 이상 입력하세요.</p>
           ) : searching ? (
@@ -184,7 +211,8 @@ export default function MapRouteCard({
               검색 결과가 없습니다. 상세 주소를 입력하고 Enter를 눌러 적용하거나 지도 아이콘을 이용하세요.
             </p>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
