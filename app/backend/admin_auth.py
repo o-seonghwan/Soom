@@ -6,6 +6,7 @@ all outstanding tokens; logout additionally revokes its current nonce.
 Deploy behind HTTPS using the same public site for frontend/API.
 """
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -39,7 +40,7 @@ def _admin_credentials():
 
 def _secret() -> bytes:
     secret = os.getenv("ADMIN_SESSION_SECRET", "")
-    if len(secret) < 32:
+    if len(secret) < 32 or secret.startswith("REPLACE_WITH_") or secret == "CHANGE_ME":
         raise HTTPException(status_code=503, detail="ADMIN_SESSION_SECRET을 32자 이상으로 설정하세요.")
     return secret.encode("utf-8")
 
@@ -78,7 +79,7 @@ def _decode(token: str) -> dict:
         if not isinstance(data.get("csrf"), str):
             raise ValueError("invalid csrf")
         return data
-    except (ValueError, KeyError, TypeError, UnicodeError, json.JSONDecodeError) as error:
+    except (ValueError, KeyError, TypeError, UnicodeError, binascii.Error, json.JSONDecodeError) as error:
         raise HTTPException(status_code=401, detail="관리자 세션이 만료되었거나 유효하지 않습니다.") from error
 
 
