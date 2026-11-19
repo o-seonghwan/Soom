@@ -186,7 +186,6 @@ export default function App() {
   const [endLookup, setEndLookup] = useState<{ key: string; address: string | null } | null>(null);
   const startAddress = start ? (startLookup?.key === start.join(",") ? startLookup.address : undefined) : null;
   const endAddress = end ? (endLookup?.key === end.join(",") ? endLookup.address : undefined) : null;
-  const [showCoordinates, setShowCoordinates] = useState(false);
 
   // Geocoding is for display only; route coordinates remain unchanged.
   useEffect(() => {
@@ -527,70 +526,6 @@ export default function App() {
   }
 
 
-  // =======================================
-  // 9. 직접 입력 좌표 적용
-  // =======================================
-
-  function applyCoordinate(mode: LocationMode) {
-    if (searchInProgress.current) {
-      return;
-    }
-
-    const text =
-      mode === "start"
-        ? startText
-        : endText;
-
-    const point = parseCoordinate(text);
-
-    if (!point) {
-      window.alert(
-        "좌표를 '위도, 경도' 형식으로 입력하세요."
-      );
-      return;
-    }
-
-    updateLocation(mode, point);
-  }
-
-
-  // =======================================
-  // 10. 현재 위치를 출발지로 설정
-  // =======================================
-
-  function requestCurrentLocation(mode: "start" | "focus") {
-    if (searchInProgress.current) return;
-    if (!navigator.geolocation) {
-      window.alert("현재 위치 기능을 지원하지 않습니다.");
-      return;
-    }
-    const purpose = mode === "start"
-      ? "현재 위치를 출발지에 입력하려면 위치 정보 사용에 동의해주세요. 동의한 경우에만 브라우저에 위치 권한을 요청합니다."
-      : "현재 위치로 지도를 이동하려면 위치 정보 사용에 동의해주세요. 위치를 경로 출발지로 저장하지 않습니다.";
-    if (!window.confirm(purpose)) return;
-
-    navigator.geolocation.getCurrentPosition(
-      position => {
-        const point: Coordinate = [position.coords.latitude, position.coords.longitude];
-        if (mode === "start") {
-          updateLocation("start", point);
-          setSelectionMode("end");
-        } else {
-          setFocusPoint([...point]);
-        }
-      },
-      error => {
-        console.error("위치 조회 오류:", error);
-        window.alert("위치를 확인하지 못했습니다. 브라우저의 위치 접근 권한과 HTTPS 또는 localhost 실행 여부를 확인하세요.");
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    );
-  }
-
-  function useCurrentLocation() {
-    requestCurrentLocation("start");
-  }
-
   function swapLocations() {
     if (searchInProgress.current) return;
     cancelPendingRouteSearch();
@@ -679,31 +614,6 @@ export default function App() {
     // handleSearch aborts the older request and accepts only the latest result.
     void handleSearch(value, true);
   }
-
-  // =======================================
-  // 12. 경로 초기화
-  // =======================================
-
-  function resetRoute() {
-    if (searchInProgress.current) {
-      return;
-    }
-    cancelPendingRouteSearch();
-
-    setStart(null);
-    setEnd(null);
-    setStartLookup(null);
-    setEndLookup(null);
-
-    setStartText("");
-    setEndText("");
-
-    setFocusPoint(null);
-    setSelectionMode("start");
-
-    clearSearchResult();
-  }
-
 
   // =======================================
   // 13. 페이지 전환
@@ -863,35 +773,6 @@ export default function App() {
         {loading && <p role="status" className="mt-3 text-xs text-slate-600">경로 계산 중... {elapsedSeconds.toFixed(1)}초</p>}
         {!loading && searchStatus === "error" && <p role="alert" className="mt-3 text-xs text-red-600">경로 탐색에 실패했습니다.</p>}
 
-        {/* 기존 수동 좌표 입력은 별도 접이식 도구로 보존 */}
-        {pageMode !== "report" && (
-          <div className="mt-3 border-t pt-3">
-            <button type="button" onClick={() => setShowCoordinates(value => !value)}
-              className="text-xs font-semibold text-slate-600">
-              {showCoordinates ? "좌표 직접 입력 닫기 ▲" : "좌표 직접 입력 ▼"}
-            </button>
-            {showCoordinates && (
-              <div className="mt-2 space-y-2">
-                {(["start", "end"] as const).map(mode => (
-                  <div key={mode} className="flex items-center gap-2">
-                    <input aria-label={mode === "start" ? "출발지 좌표" : "목적지 좌표"}
-                      placeholder={mode === "start" ? "출발지 위도, 경도" : "목적지 위도, 경도"}
-                      value={mode === "start" ? startText : endText}
-                      onChange={event => mode === "start" ? setStartText(event.target.value) : setEndText(event.target.value)}
-                      className="min-w-0 flex-1 rounded-lg border p-2 text-xs" />
-                    <button type="button" onClick={() => applyCoordinate(mode)}
-                      className="rounded-lg bg-slate-100 px-3 py-2 text-xs">적용</button>
-                  </div>
-                ))}
-                <button type="button" onClick={useCurrentLocation} className="rounded-lg border px-3 py-2 text-xs">
-                  동의 후 현재 위치를 출발지로 지정
-                </button>
-                <button type="button" onClick={resetRoute} className="ml-2 rounded-lg border px-3 py-2 text-xs">경로 초기화</button>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* 흡연 제보 탭 */}
         {pageMode === "report" && (
           <div className="space-y-3">
@@ -925,12 +806,6 @@ export default function App() {
           </p>
         )}
 
-        <p className="mt-3 text-xs text-gray-500">
-          ※ 청정지수는 모델 위험점수 기반 파생 지표이며 실측 대기질이 아닙니다.
-          공개 지도에는 승인된 제보만 표시되며,
-          사용자 제보는 위험 회피 A*에 자동으로
-          반영되지 않습니다.
-        </p>
       </section>
       )}
       </main>
