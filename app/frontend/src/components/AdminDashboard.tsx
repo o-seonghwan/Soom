@@ -91,6 +91,7 @@ export default function AdminDashboard({
   const [password, setPassword] = useState("");
   const [rememberLogin, setRememberLogin] = useState(false);
   const csrfToken = useRef<string | null>(null);
+  const sessionGeneration = useRef(0);
 
   const [authorized, setAuthorized] =
     useState(false);
@@ -140,7 +141,7 @@ export default function AdminDashboard({
         setAdminReports(data);
         updateNotesFromReports(data);
         setAuthorized(true);
-        onSessionChange?.("cookie-session");
+        onSessionChange?.(`cookie-session-${++sessionGeneration.current}`);
         onAuthorizedChange?.(true);
         onAdminReportsChange?.(data);
         setMessage("이전 관리자 로그인 상태를 복원했습니다.");
@@ -188,7 +189,7 @@ export default function AdminDashboard({
 
       setAuthorized(true);
       onAuthorizedChange?.(true);
-      onSessionChange?.("cookie-session");
+      onSessionChange?.(`cookie-session-${++sessionGeneration.current}`);
       setPassword("");
       setMessage(
         "관리자 로그인이 완료되었습니다."
