@@ -209,7 +209,7 @@ export default function App() {
   }, [end]);
 
   const [avoidanceLevel, setAvoidanceLevel] =
-    useState<RouteRequest["avoidanceLevel"]>(50);
+    useState<RouteRequest["avoidanceLevel"]>(60);
 
   // ---------------------------------------
   // 경로 탐색 상태
