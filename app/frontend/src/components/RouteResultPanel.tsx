@@ -26,7 +26,7 @@ export default function RouteResultPanel({ route, type }: Props) {
             </div>
           </div>
           <p className="text-xs text-slate-500">
-            {shortest ? "보행 거리만 고려한 경로입니다." : "선택한 회피 강도와 모델 위험점수를 반영한 경로입니다."}
+            {shortest ? "보행 거리만 고려한 경로입니다." : "선택한 회피 강도화 숨길 AI 청정지수를 반영한 경로입니다."}
           </p>
         </>
       ) : (
