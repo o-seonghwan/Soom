@@ -830,13 +830,13 @@ export default function App() {
         {routes.length > 0 && <CleanlinessLegend scope="route" />}
         <button type="button" onClick={() => setShowControls(value => !value)}
           aria-expanded={showControls}
-          className="absolute left-3 top-[124px] max-[760px]:top-[224px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
+          className="absolute left-3 top-[140px] max-[760px]:top-[240px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
           {showControls ? "패널 닫기 ×" : "경로 결과 · 제보 ☰"}
         </button>
 
       {/* 경로 설정과 제보 폼은 필요할 때만 열어서 지도를 가리지 않도록 함 */}
       {showControls && (
-      <section className="absolute left-3 top-[172px] max-[760px]:top-[272px] z-[700] max-h-[min(56dvh,calc(100%-190px))] w-[min(390px,calc(100%-24px))] max-[760px]:w-[min(390px,calc(100%-5.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
+      <section className="absolute left-3 top-[188px] max-[760px]:top-[288px] z-[700] max-h-[min(56dvh,calc(100%-206px))] w-[min(390px,calc(100%-24px))] max-[760px]:w-[min(390px,calc(100%-5.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
 
         {/* 최단/회피 경로 결과와 흡연 제보 탭 */}
         <div className="mb-4 grid grid-cols-3 gap-1">
