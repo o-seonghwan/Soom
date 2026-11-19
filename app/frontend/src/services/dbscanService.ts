@@ -2,9 +2,9 @@ import type { DbscanSitesResponse } from "../types/dbscan";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
-export async function getDbscanSites(authHeader: string): Promise<DbscanSitesResponse> {
+export async function getDbscanSites(_authSession: string): Promise<DbscanSitesResponse> {
   const response = await fetch(`${API_BASE_URL}/api/b2g/dbscan/sites`, {
-    headers: { Authorization: authHeader },
+    credentials: "include",
     cache: "no-store",
   });
   if (!response.ok) {
