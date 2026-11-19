@@ -17,7 +17,7 @@ export default function RoutePanel({ avoidanceLevel, onAvoidanceLevelChange }: P
   }, [avoidanceLevel]);
 
   function commit(value: number) {
-    const next = Math.max(0, Math.min(100, value));
+    const next = Math.max(0, Math.min(100, Math.round(value / 20) * 20));
     if (next === lastCommitted.current) return;
     lastCommitted.current = next;
     onAvoidanceLevelChange(next);
@@ -33,15 +33,25 @@ export default function RoutePanel({ avoidanceLevel, onAvoidanceLevelChange }: P
           {draft}%
         </output>
       </div>
-      <input id="avoidance-level" type="range" min={0} max={100} step={1} value={draft}
-        onChange={event => setDraft(Number(event.currentTarget.value))}
-        onPointerUp={event => commit(Number(event.currentTarget.value))}
-        onKeyUp={event => commit(Number(event.currentTarget.value))}
-        onBlur={event => commit(Number(event.currentTarget.value))}
-        aria-label="간접흡연 회피 강도" aria-valuetext={`${draft}%`}
-        title="드래그 후 놓으면 경로가 갱신됩니다."
-        className="block w-full cursor-pointer accent-green-600"
-      />
+      <div className="relative">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-[8px] top-2.5 flex -translate-y-1/2 justify-between">
+          {[0, 20, 40, 60, 80, 100].map(value => (
+            <span key={value} className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+          ))}
+        </div>
+        <input id="avoidance-level" type="range" min={0} max={100} step={20} value={draft}
+          onChange={event => setDraft(Number(event.currentTarget.value))}
+          onPointerUp={event => commit(Number(event.currentTarget.value))}
+          onKeyUp={event => commit(Number(event.currentTarget.value))}
+          onBlur={event => commit(Number(event.currentTarget.value))}
+          aria-label="간접흡연 회피 강도" aria-valuetext={`${draft}%`}
+          title="20% 단위로 선택하며, 드래그 후 놓으면 경로가 갱신됩니다."
+          className="relative z-10 block h-5 w-full cursor-pointer accent-green-600"
+        />
+        <div aria-hidden="true" className="flex justify-between text-[9px] tabular-nums text-slate-500">
+          {[0, 20, 40, 60, 80, 100].map(value => <span key={value}>{value}</span>)}
+        </div>
+      </div>
       <div className="mt-0.5 flex justify-between gap-1 text-[10px] text-slate-500">
         <span>거리 우선</span>
         <span>회피 우선</span>
