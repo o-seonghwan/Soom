@@ -45,7 +45,7 @@ export default function B2GDashboard() {
   const [dbscanSites, setDbscanSites] = useState<DbscanSitesResponse | null>(null);
   const [dbscanLoading, setDbscanLoading] = useState(false);
   const [dbscanError, setDbscanError] = useState("");
-  const [selectedDbscanCluster, setSelectedDbscanCluster] = useState("");
+  const [selectedDbscanCluster, setSelectedDbscanCluster] = useState<string | null>(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [adminAuthorized, setAdminAuthorized] = useState(false);
   const [logoutSignal, setLogoutSignal] = useState(0);
@@ -67,7 +67,7 @@ export default function B2GDashboard() {
       setDbscanSites(null);
       setDbscanError("");
       setDbscanLoading(false);
-      setSelectedDbscanCluster("");
+      setSelectedDbscanCluster(null);
       setAnalysisTab("reports");
       setShowDashboard(false);
     }
@@ -81,7 +81,17 @@ export default function B2GDashboard() {
     try {
       const result = await getDbscanSites(header);
       // A late network response must not restore private data after logout.
-      if (authHeaderRef.current === header) setDbscanSites(result);
+      if (authHeaderRef.current === header) {
+        setDbscanSites(result);
+        // Default to the first actual hotspot, not "전체 적발 집중지".
+        // Preserve a manually selected filter (including "all") on reload.
+        setSelectedDbscanCluster(current => {
+          if (current === null || (current !== "" && !result.clusters.some(c => c.id === current))) {
+            return result.clusters[0]?.id ?? "";
+          }
+          return current;
+        });
+      }
     } catch (err) {
       if (authHeaderRef.current !== header) return;
       setDbscanSites(null);
@@ -228,6 +238,17 @@ export default function B2GDashboard() {
           <button type="button" onClick={() => setShowAdminPanel(false)}
             aria-label="관리자 창 닫기" className="rounded-lg border px-3 py-1 text-sm">닫기 ×</button>
         </div>
+        {adminAuthorized && (
+          <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <p className="font-bold">관리자 로그인 완료</p>
+            <p className="mt-1 text-xs">지자체 분석 패널에서 관리자 대시보드와 DBSCAN 입지 추천을 이용할 수 있습니다.</p>
+            <button type="button"
+              onClick={() => { setShowDashboard(true); setShowAdminPanel(false); }}
+              className="mt-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">
+              지자체 분석 보기
+            </button>
+          </div>
+        )}
         <AdminDashboard
           dashboardTarget={dashboardTarget}
           riskSource={dataSource}
@@ -239,11 +260,17 @@ export default function B2GDashboard() {
           onAdminReportsChange={setAdminReports}
           onAuthorizedChange={(value) => {
             setAdminAuthorized(value);
-            setShowAdminPanel(false);
             if (value) {
+              // Enter submits the login form; successful authentication must not
+              // unexpectedly dismiss the dialog. The user closes it explicitly.
+              setShowAdminPanel(true);
               setShowDashboard(true);
               setAnalysisTab("reports");
             } else {
+              // An incorrect password also reports unauthorized. Keep the
+              // login form visible so Enter does not make it disappear.
+              // Actual logout from an authenticated session can close it.
+              if (adminAuthorized) setShowAdminPanel(false);
               setShowDashboard(false);
               setDashboardTarget(null);
             }
@@ -263,7 +290,7 @@ export default function B2GDashboard() {
           cleanlinessEdges={cleanEdges}
           dbscanSites={dbscanSites}
           showDbscanSites={adminAuthorized && analysisTab === "dbscan" && dbscanSites !== null}
-          selectedDbscanCluster={selectedDbscanCluster}
+          selectedDbscanCluster={selectedDbscanCluster ?? ""}
           reports={visibleReports}
           showRisks={showRisks}
           showReports={showReports}
@@ -286,26 +313,24 @@ export default function B2GDashboard() {
             {showDashboard ? "지자체 분석 닫기 ×" : "지자체 분석 ☰"}
           </button>
         )}
-      </main>
-
-      {adminAuthorized && showDashboard && (
+        {adminAuthorized && showDashboard && (
         <section aria-label="지자체 분석"
-          className="z-[1000] max-h-[55dvh] space-y-4 overflow-y-auto bg-white p-4 pb-16 shadow-lg">
+          className="absolute left-3 top-[64px] z-[1000] max-h-[min(80dvh,calc(100%-80px))] w-[min(420px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-xl">
           <div>
             <h2 className="text-lg font-bold text-slate-800">지자체 분석</h2>
             <p className="mt-1 text-xs text-slate-500">
               관리자 제보 검토와 흡연시설 입지 추천을 별도로 확인합니다.
             </p>
           </div>
-          <div role="tablist" aria-label="지자체 분석 메뉴" className="flex gap-2">
+          <div role="tablist" aria-label="지자체 분석 메뉴" className="my-5 flex flex-wrap gap-3">
             <button type="button" role="tab" aria-selected={analysisTab === "reports"}
               onClick={() => selectAnalysisTab("reports")}
-              className={`rounded-lg px-4 py-2 text-sm font-bold ${analysisTab === "reports" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-700"}`}>
+              className={`rounded-lg px-4 py-3 text-sm font-bold ${analysisTab === "reports" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-700"}`}>
               관리자 대시보드
             </button>
             <button type="button" role="tab" aria-selected={analysisTab === "dbscan"}
               onClick={() => selectAnalysisTab("dbscan")}
-              className={`rounded-lg px-4 py-2 text-sm font-bold ${analysisTab === "dbscan" ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-700"}`}>
+              className={`rounded-lg px-4 py-3 text-sm font-bold ${analysisTab === "dbscan" ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-700"}`}>
               DBSCAN 입지 추천
             </button>
           </div>
@@ -317,15 +342,18 @@ export default function B2GDashboard() {
                 data={dbscanSites}
                 loading={dbscanLoading}
                 error={dbscanError}
-                selectedCluster={selectedDbscanCluster}
+                selectedCluster={selectedDbscanCluster ?? ""}
                 onClusterChange={setSelectedDbscanCluster}
                 onFocus={focusDbscanCandidate}
                 onReload={() => void loadDbscanSites()}
               />
             </div>
-          )}
+            )}
         </section>
       )}
+      </main>
+
+
     </div>
   );
 }

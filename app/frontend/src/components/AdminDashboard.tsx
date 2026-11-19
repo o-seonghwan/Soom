@@ -391,6 +391,8 @@ export default function AdminDashboard({
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
+            event.stopPropagation();
+            if (busy) return;
             void handleLogin();
           }}
         >
