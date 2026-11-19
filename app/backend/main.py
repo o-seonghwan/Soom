@@ -25,9 +25,10 @@ from walking_router import (
 from safe_router import calculate_safest_route
 from b2g_cleanliness import edge_cleanliness_geojson
 from dbscan_sites import load_dbscan_sites
+from childcare_exposure import load_childcare_exposure
 from risk_provider import get_risk_snapshot
 from smoking_zones import load_smoking_zones
-from address_lookup import reverse_address
+from address_lookup import reverse_address, search_addresses, forward_address
 import requests
 
 from risk_mapper import (
@@ -300,6 +301,32 @@ def reverse_address_api(lat: float, lng: float):
         raise HTTPException(status_code=503, detail="주소 조회 서비스 연결에 실패했습니다.") from error
 
 
+@app.get("/api/search-addresses")
+def search_addresses_api(q: str):
+    try:
+        return {"suggestions": search_addresses(q)}
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except requests.RequestException as error:
+        raise HTTPException(status_code=503, detail="주소 검색 서비스에 연결하지 못했습니다.") from error
+
+
+@app.get("/api/geocode-address")
+def geocode_address_api(q: str):
+    try:
+        return forward_address(q)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except requests.RequestException as error:
+        raise HTTPException(status_code=503, detail="주소 변환 서비스에 연결하지 못했습니다.") from error
+
+
 @app.get("/api/smoking-zones")
 def smoking_zones():
     """Return declared smoking locations only; empty when no official CSV configured."""
@@ -319,6 +346,15 @@ def get_b2g_dbscan_sites(admin_username: str = Depends(require_admin)):
     """Return existing DBSCAN CSV outputs only; never synthesize site suggestions."""
     try:
         return load_dbscan_sites()
+    except (ValueError, FileNotFoundError) as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+
+@app.get("/api/b2g/childcare/exposure")
+def get_b2g_childcare_exposure(admin_username: str = Depends(require_admin)):
+    """Only return the previously generated childcare ranking CSV."""
+    try:
+        return load_childcare_exposure()
     except (ValueError, FileNotFoundError) as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
 

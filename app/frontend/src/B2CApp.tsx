@@ -5,6 +5,7 @@ import MapView from "./components/MapView";
 import ReportForm from "./components/ReportForm";
 import RouteResultPanel from "./components/RouteResultPanel";
 import { lookupAddress } from "./services/addressService";
+import { geocodeAddress, type AddressSuggestion } from "./services/addressSearchService";
 
 import type {
   Coordinate,
@@ -193,7 +194,7 @@ export default function App() {
     const controller = new AbortController();
     const key = start.join(",");
     void lookupAddress(start, controller.signal)
-      .then(address => { if (!controller.signal.aborted) setStartLookup({ key, address }); })
+      .then(address => { if (!controller.signal.aborted) { setStartLookup({ key, address }); if (address) setStartText(value => value === formatCoordinate(start) ? address : value); } })
       .catch(error => { if (!controller.signal.aborted) { console.warn("출발지 주소 조회:", error); setStartLookup({ key, address: null }); } });
     return () => controller.abort();
   }, [start]);
@@ -203,7 +204,7 @@ export default function App() {
     const controller = new AbortController();
     const key = end.join(",");
     void lookupAddress(end, controller.signal)
-      .then(address => { if (!controller.signal.aborted) setEndLookup({ key, address }); })
+      .then(address => { if (!controller.signal.aborted) { setEndLookup({ key, address }); if (address) setEndText(value => value === formatCoordinate(end) ? address : value); } })
       .catch(error => { if (!controller.signal.aborted) { console.warn("목적지 주소 조회:", error); setEndLookup({ key, address: null }); } });
     return () => controller.abort();
   }, [end]);
@@ -431,23 +432,76 @@ export default function App() {
 
   function updateLocation(
     mode: LocationMode,
-    point: Coordinate
+    point: Coordinate,
+    textLabel?: string
   ) {
     cancelPendingRouteSearch();
     if (mode === "start") {
       setStart(point);
       setStartLookup(null);
-      setStartText(formatCoordinate(point));
+      setStartText(textLabel ?? formatCoordinate(point));
     } else {
       setEnd(point);
       setEndLookup(null);
-      setEndText(formatCoordinate(point));
+      setEndText(textLabel ?? formatCoordinate(point));
     }
 
     setFocusPoint([...point]);
     clearSearchResult();
   }
 
+
+  // Editing an address invalidates its old coordinates: searches cannot run
+  // with stale points while the input shows a different location.
+  function handleAddressTextChange(mode: LocationMode, text: string) {
+    cancelPendingRouteSearch();
+    if (mode === "start") {
+      setStartText(text);
+      setStart(null);
+      setStartLookup(null);
+    } else {
+      setEndText(text);
+      setEnd(null);
+      setEndLookup(null);
+    }
+    clearSearchResult();
+  }
+
+  function chooseAddress(mode: LocationMode, suggestion: AddressSuggestion) {
+    if (searchInProgress.current) return;
+    updateLocation(mode, [suggestion.lat, suggestion.lng], suggestion.address || suggestion.title);
+    if (mode === "start") setSelectionMode("end");
+  }
+
+  async function applyAddressText(mode: LocationMode): Promise<void> {
+    const text = (mode === "start" ? startText : endText).trim();
+    if (!text) {
+      window.alert("주소 또는 장소명을 입력하세요.");
+      return;
+    }
+    // Preserve the existing coordinate-input behavior.
+    const coordinate = parseCoordinate(text);
+    if (coordinate) {
+      updateLocation(mode, coordinate);
+      if (mode === "start") setSelectionMode("end");
+      return;
+    }
+    try {
+      const point = await geocodeAddress(text);
+      // An async result must not overwrite a newer user edit.
+      const current = mode === "start" ? latestStartText.current : latestEndText.current;
+      if (current.trim() !== text) return;
+      updateLocation(mode, point, text);
+      if (mode === "start") setSelectionMode("end");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "주소를 확인할 수 없습니다.");
+    }
+  }
+
+  const latestStartText = useRef(startText);
+  const latestEndText = useRef(endText);
+  latestStartText.current = startText;
+  latestEndText.current = endText;
 
   // =======================================
   // 8. 지도 클릭
@@ -761,7 +815,12 @@ export default function App() {
           endAddress={endAddress}
           routeLoading={loading}
           onSearch={() => void handleSearch()}
-          onSelectLocation={setSelectionMode}
+          onSelectLocation={mode => { if (pageMode === "report") setPageMode("safest"); setSelectionMode(mode); }}
+          startInputText={startText}
+          endInputText={endText}
+          onAddressTextChange={handleAddressTextChange}
+          onAddressChoose={chooseAddress}
+          onAddressApply={applyAddressText}
           onSwapLocations={swapLocations}
           onLocate={focusCurrentLocation}
           currentLocation={currentLocation}
@@ -771,13 +830,13 @@ export default function App() {
         {routes.length > 0 && <CleanlinessLegend scope="route" />}
         <button type="button" onClick={() => setShowControls(value => !value)}
           aria-expanded={showControls}
-          className="absolute left-3 top-[124px] max-[760px]:top-[224px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
+          className="absolute left-3 top-[140px] max-[760px]:top-[240px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
           {showControls ? "패널 닫기 ×" : "경로 결과 · 제보 ☰"}
         </button>
 
       {/* 경로 설정과 제보 폼은 필요할 때만 열어서 지도를 가리지 않도록 함 */}
       {showControls && (
-      <section className="absolute left-3 top-[172px] max-[760px]:top-[272px] z-[700] max-h-[min(56dvh,calc(100%-190px))] w-[min(390px,calc(100%-24px))] max-[760px]:w-[min(390px,calc(100%-5.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
+      <section className="absolute left-3 top-[188px] max-[760px]:top-[288px] z-[700] max-h-[min(56dvh,calc(100%-206px))] w-[min(390px,calc(100%-24px))] max-[760px]:w-[min(390px,calc(100%-5.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
 
         {/* 최단/회피 경로 결과와 흡연 제보 탭 */}
         <div className="mb-4 grid grid-cols-3 gap-1">

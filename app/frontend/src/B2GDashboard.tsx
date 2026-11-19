@@ -9,6 +9,9 @@ import CleanlinessLegend from "./components/CleanlinessLegend";
 import DbscanSitePanel from "./components/DbscanSitePanel";
 import { getDbscanSites } from "./services/dbscanService";
 import type { DbscanSitesResponse, DbscanCandidate } from "./types/dbscan";
+import ChildcareExposurePanel from "./components/ChildcareExposurePanel";
+import { getChildcareExposure } from "./services/childcareService";
+import type { ChildcareExposureResponse, ChildcareExposure } from "./types/childcare";
 
 import { getReports } from "./services/reportService";
 import { getRisks } from "./services/riskService";
@@ -39,10 +42,14 @@ export default function B2GDashboard() {
   const [showRisks, setShowRisks] =
     useState(true);
   const [showDashboard, setShowDashboard] = useState(false);
-  const [analysisTab, setAnalysisTab] = useState<"reports" | "dbscan">("reports");
+  const [analysisTab, setAnalysisTab] = useState<"reports" | "dbscan" | "childcare">("reports");
   const [dashboardTarget, setDashboardTarget] = useState<HTMLDivElement | null>(null);
   const authHeaderRef = useRef<string | null>(null);
   const [dbscanSites, setDbscanSites] = useState<DbscanSitesResponse | null>(null);
+  const [childcareData, setChildcareData] = useState<ChildcareExposureResponse | null>(null);
+  const [childcareLoading, setChildcareLoading] = useState(false);
+  const [childcareError, setChildcareError] = useState("");
+  const [selectedChildcare, setSelectedChildcare] = useState<ChildcareExposure | null>(null);
   const [dbscanLoading, setDbscanLoading] = useState(false);
   const [dbscanError, setDbscanError] = useState("");
   const [selectedDbscanCluster, setSelectedDbscanCluster] = useState<string | null>(null);
@@ -65,6 +72,10 @@ export default function B2GDashboard() {
     authHeaderRef.current = header;
     if (!header) {
       setDbscanSites(null);
+      setChildcareData(null);
+      setChildcareLoading(false);
+      setChildcareError("");
+      setSelectedChildcare(null);
       setDbscanError("");
       setDbscanLoading(false);
       setSelectedDbscanCluster(null);
@@ -101,9 +112,34 @@ export default function B2GDashboard() {
     }
   }
 
-  function selectAnalysisTab(tab: "reports" | "dbscan") {
+  async function loadChildcareExposure() {
+    const header = authHeaderRef.current;
+    if (!header) return;
+    setChildcareLoading(true);
+    setChildcareError("");
+    try {
+      const result = await getChildcareExposure(header);
+      if (authHeaderRef.current === header) setChildcareData(result);
+    } catch (err) {
+      if (authHeaderRef.current !== header) return;
+      setChildcareData(null);
+      setChildcareError(err instanceof Error ? err.message : "어린이집 노출순위 조회 실패");
+    } finally {
+      if (authHeaderRef.current === header) setChildcareLoading(false);
+    }
+  }
+
+  function selectAnalysisTab(tab: "reports" | "dbscan" | "childcare") {
     setAnalysisTab(tab);
+    if (tab !== "childcare") setSelectedChildcare(null);
     if (tab === "dbscan" && !dbscanSites && !dbscanLoading) void loadDbscanSites();
+    if (tab === "childcare" && !childcareData && !childcareLoading) void loadChildcareExposure();
+  }
+
+  function focusChildcare(nursery: ChildcareExposure) {
+    setSelectedChildcare(nursery);
+    setFocusPoint([nursery.lat, nursery.lng]);
+    setShowDashboard(false);
   }
 
   function focusDbscanCandidate(candidate: DbscanCandidate) {
@@ -241,7 +277,7 @@ export default function B2GDashboard() {
         {adminAuthorized && (
           <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
             <p className="font-bold">관리자 로그인 완료</p>
-            <p className="mt-1 text-xs">지자체 분석 패널에서 관리자 대시보드와 DBSCAN 입지 추천을 이용할 수 있습니다.</p>
+            <p className="mt-1 text-xs">지자체 분석 패널에서 관리자 대시보드, DBSCAN 입지 추천, 어린이집 보호 우선순위를 이용할 수 있습니다.</p>
             <button type="button"
               onClick={() => { setShowDashboard(true); setShowAdminPanel(false); }}
               className="mt-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">
@@ -291,6 +327,7 @@ export default function B2GDashboard() {
           dbscanSites={dbscanSites}
           showDbscanSites={adminAuthorized && analysisTab === "dbscan" && dbscanSites !== null}
           selectedDbscanCluster={selectedDbscanCluster ?? ""}
+          selectedChildcare={adminAuthorized && analysisTab === "childcare" ? selectedChildcare : null}
           reports={visibleReports}
           showRisks={showRisks}
           showReports={showReports}
@@ -319,7 +356,7 @@ export default function B2GDashboard() {
           <div>
             <h2 className="text-lg font-bold text-slate-800">지자체 분석</h2>
             <p className="mt-1 text-xs text-slate-500">
-              관리자 제보 검토와 흡연시설 입지 추천을 별도로 확인합니다.
+              관리자 제보 검토, 흡연시설 입지 추천, 어린이집 보호 우선순위를 확인합니다.
             </p>
           </div>
           <div role="tablist" aria-label="지자체 분석 메뉴" className="my-5 flex flex-wrap gap-3">
@@ -333,10 +370,15 @@ export default function B2GDashboard() {
               className={`rounded-lg px-4 py-3 text-sm font-bold ${analysisTab === "dbscan" ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-700"}`}>
               DBSCAN 입지 추천
             </button>
+            <button type="button" role="tab" aria-selected={analysisTab === "childcare"}
+              onClick={() => selectAnalysisTab("childcare")}
+              className={`rounded-lg px-4 py-3 text-sm font-bold ${analysisTab === "childcare" ? "bg-violet-700 text-white" : "bg-slate-100 text-slate-700"}`}>
+              어린이집 보호 우선순위
+            </button>
           </div>
           {analysisTab === "reports" ? (
             <div role="tabpanel" aria-label="관리자 대시보드" ref={setDashboardTarget} />
-          ) : (
+          ) : analysisTab === "dbscan" ? (
             <div role="tabpanel" aria-label="DBSCAN 입지 추천">
               <DbscanSitePanel
                 data={dbscanSites}
@@ -348,7 +390,17 @@ export default function B2GDashboard() {
                 onReload={() => void loadDbscanSites()}
               />
             </div>
-            )}
+          ) : (
+            <div role="tabpanel" aria-label="어린이집 보호 우선순위">
+              <ChildcareExposurePanel
+                data={childcareData}
+                loading={childcareLoading}
+                error={childcareError}
+                onReload={() => void loadChildcareExposure()}
+                onFocus={focusChildcare}
+              />
+            </div>
+          )}
         </section>
       )}
       </main>

@@ -23,6 +23,8 @@ import type { Report } from "../types/report";
 import { getCleanColor } from "../utils/cleanColor";
 import type { CleanEdgeFeature } from "../types/cleanliness";
 import type { DbscanSitesResponse } from "../types/dbscan";
+import type { AddressSuggestion } from "../services/addressSearchService";
+import type { ChildcareExposure } from "../types/childcare";
 import MapRouteCard from "./MapRouteCard";
 import RoutePanel from "./RoutePanel";
 import type { RouteRequest } from "../types/route";
@@ -56,6 +58,7 @@ interface MapViewProps {
   dbscanSites?: DbscanSitesResponse | null;
   showDbscanSites?: boolean;
   selectedDbscanCluster?: string;
+  selectedChildcare?: ChildcareExposure | null;
   reports: Report[];
   showRisks: boolean;
   showReports: boolean;
@@ -75,6 +78,11 @@ interface MapViewProps {
   routeLoading?: boolean;
   onSearch?: () => void;
   onSelectLocation?: (mode: "start" | "end") => void;
+  startInputText?: string;
+  endInputText?: string;
+  onAddressTextChange?: (mode: "start" | "end", text: string) => void;
+  onAddressChoose?: (mode: "start" | "end", suggestion: AddressSuggestion) => void;
+  onAddressApply?: (mode: "start" | "end") => Promise<void>;
   onSwapLocations?: () => void;
   onLocate?: () => void;
   currentLocation?: Coordinate | null;
@@ -230,6 +238,7 @@ export default function MapView({
   dbscanSites = null,
   showDbscanSites = false,
   selectedDbscanCluster = "",
+  selectedChildcare = null,
   reports,
   showRisks,
   showReports,
@@ -249,6 +258,11 @@ export default function MapView({
   routeLoading = false,
   onSearch,
   onSelectLocation,
+  startInputText = "",
+  endInputText = "",
+  onAddressTextChange,
+  onAddressChoose,
+  onAddressApply,
   onSwapLocations,
   onLocate,
   currentLocation = null,
@@ -528,6 +542,22 @@ export default function MapView({
           </>
         )}
 
+        {/* Selected childcare facility: show a distinct marker when reviewing priority ranking. */}
+        {audience === "b2g" && selectedChildcare && (
+          <CircleMarker
+            center={[selectedChildcare.lat, selectedChildcare.lng]}
+            radius={10}
+            bubblingMouseEvents={false}
+            pathOptions={{ color: "#5b21b6", weight: 3, fillColor: "#c4b5fd", fillOpacity: 0.95 }}>
+            <Popup>
+              <strong>{selectedChildcare.name}</strong>
+              <div>어린이집 보호 우선순위 {selectedChildcare.priorityRank}위</div>
+              <div>주변 노출점수 {selectedChildcare.exposureScore.toFixed(1)}</div>
+              <div>주변 AI 위험지수 기반 · 실측 흡연 노출 아님</div>
+            </Popup>
+          </CircleMarker>
+        )}
+
         {/* 사용자 제보 */}
         {showReports &&
           reports.map((report) => (
@@ -601,11 +631,13 @@ export default function MapView({
         )}
       </MapContainer>
 
-      {audience === "b2c" && onSelectLocation && onSwapLocations && onSearch && (
-        <div className="pointer-events-none absolute left-3 top-3 z-[650] w-[min(440px,calc(100%-5.5rem))]">
+      {audience === "b2c" && onSelectLocation && onSwapLocations && onSearch && onAddressTextChange && onAddressChoose && onAddressApply && (
+        <div className="pointer-events-none absolute left-3 top-3 z-[800] w-[min(440px,calc(100%-5.5rem))]">
           <MapRouteCard start={start} end={end} selectionMode={selectionMode}
-            startAddress={startAddress} endAddress={endAddress} loading={routeLoading}
-            onSelect={onSelectLocation} onSwap={onSwapLocations} onSearch={onSearch} />
+            startText={startInputText} endText={endInputText} loading={routeLoading}
+            onMapSelect={onSelectLocation} onTextChange={onAddressTextChange}
+            onChoose={onAddressChoose} onApplyText={onAddressApply}
+            onSwap={onSwapLocations} onSearch={onSearch} />
         </div>
       )}
 
