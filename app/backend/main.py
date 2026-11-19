@@ -1,6 +1,5 @@
 
 from contextlib import asynccontextmanager
-import os
 from typing import Literal
 from uuid import UUID
 
@@ -12,7 +11,6 @@ from fastapi import (
     FastAPI,
     HTTPException,
     Request,
-    Response,
     status,
 )
 
@@ -53,7 +51,7 @@ from report_repository import (
     update_report_review,
 )
 
-from admin_auth import require_admin, check_password, create_session, get_cookie_session, revoke_session, COOKIE_NAME, REMEMBER_SECONDS
+from admin_auth import require_admin
 
 
 # =========================================
@@ -121,14 +119,12 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        *[origin.strip() for origin in os.getenv("ADMIN_ALLOWED_ORIGINS", "").split(",") if origin.strip()],
     ],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH"],
     allow_headers=[
         "Content-Type",
         "Authorization",
-        "X-CSRF-Token",
     ],
 )
 
@@ -452,72 +448,16 @@ def get_reports(limit: int = 500):
 
 
 # =========================================
-# 9. 관리자 보안 쿠키 세션
-# =========================================
-
-class AdminLoginRequest(BaseModel):
-    username: str
-    password: str
-    remember: bool = False
-
-
-def _check_admin_origin(request: Request):
-    # Browser-origin check for cookie-authenticated state changing calls.
-    from urllib.parse import urlparse
-    origin = request.headers.get("origin")
-    if not origin:
-        return  # Non-browser clients still require the CSRF token.
-    allowed = {
-        "http://localhost:5173", "http://127.0.0.1:5173",
-        f"{request.url.scheme}://{request.headers.get('host', '')}",
-        *[v.strip() for v in os.getenv("ADMIN_ALLOWED_ORIGINS", "").split(",") if v.strip()],
-    }
-    if origin not in allowed:
-        raise HTTPException(status_code=403, detail="관리자 요청의 출처가 허용되지 않았습니다.")
-
-
-@app.post("/api/admin/session")
-def create_admin_session(body: AdminLoginRequest, request: Request, response: Response):
-    _check_admin_origin(request)
-    user = check_password(body.username, body.password)
-    token, info = create_session(user, body.remember)
-    response.set_cookie(
-        key=COOKIE_NAME, value=token,
-        max_age=REMEMBER_SECONDS if body.remember else None,
-        path="/api", httponly=True,
-        secure=os.getenv("ADMIN_COOKIE_SECURE", "false").lower() == "true",
-        samesite="lax",
-    )
-    response.headers["Cache-Control"] = "no-store"
-    return info
-
-
-@app.delete("/api/admin/session")
-def delete_admin_session(request: Request, response: Response,
-                         admin_username: str = Depends(require_admin)):
-    _check_admin_origin(request)
-    revoke_session(request)
-    response.delete_cookie(key=COOKIE_NAME, path="/api", samesite="lax")
-    response.headers["Cache-Control"] = "no-store"
-    return {"authenticated": False}
-
-
-# =========================================
 # 9. 관리자 로그인 확인 API
 # =========================================
 
 @app.get("/api/admin/me")
-def admin_me(request: Request, response: Response, admin_username: str = Depends(require_admin)):
-    response.headers["Cache-Control"] = "no-store"
-    if not request.cookies.get(COOKIE_NAME):
-        # Preserve the original HTTP Basic API response for existing API clients.
-        return {"authenticated": True, "username": admin_username}
-    data = get_cookie_session(request)
+def admin_me(
+    admin_username: str = Depends(require_admin),
+):
     return {
         "authenticated": True,
         "username": admin_username,
-        "csrfToken": data["csrf"],
-        "expiresAt": data["exp"],
     }
 
 
@@ -556,10 +496,8 @@ def get_admin_reports(
 def review_report(
     report_id: UUID,
     review: ReportReview,
-    request: Request,
     admin_username: str = Depends(require_admin),
 ):
-    _check_admin_origin(request)
     try:
         updated = update_report_review(
             report_id=report_id,
