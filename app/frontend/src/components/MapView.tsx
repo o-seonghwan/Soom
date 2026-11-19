@@ -632,7 +632,7 @@ export default function MapView({
       </MapContainer>
 
       {audience === "b2c" && onSelectLocation && onSwapLocations && onSearch && onAddressTextChange && onAddressChoose && onAddressApply && (
-        <div className="pointer-events-none absolute left-3 top-3 z-[650] w-[min(440px,calc(100%-5.5rem))]">
+        <div className="pointer-events-none absolute left-3 top-3 z-[800] w-[min(440px,calc(100%-5.5rem))]">
           <MapRouteCard start={start} end={end} selectionMode={selectionMode}
             startText={startInputText} endText={endInputText} loading={routeLoading}
             onMapSelect={onSelectLocation} onTextChange={onAddressTextChange}
