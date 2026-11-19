@@ -484,7 +484,7 @@ def create_admin_session(body: AdminLoginRequest, request: Request, response: Re
     response.set_cookie(
         key=COOKIE_NAME, value=token,
         max_age=REMEMBER_SECONDS if body.remember else None,
-        path="/api/admin", httponly=True,
+        path="/api", httponly=True,
         secure=os.getenv("ADMIN_COOKIE_SECURE", "false").lower() == "true",
         samesite="lax",
     )
@@ -497,7 +497,7 @@ def delete_admin_session(request: Request, response: Response,
                          admin_username: str = Depends(require_admin)):
     _check_admin_origin(request)
     revoke_session(request)
-    response.delete_cookie(key=COOKIE_NAME, path="/api/admin", samesite="lax")
+    response.delete_cookie(key=COOKIE_NAME, path="/api", samesite="lax")
     response.headers["Cache-Control"] = "no-store"
     return {"authenticated": False}
 
