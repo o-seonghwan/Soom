@@ -71,10 +71,15 @@ export default function ChildcareExposurePanel({ data, loading, error, onReload,
                     <p className="mt-1 text-xs text-slate-600">{nursery.address}</p>
                   </div>
                   <span className="shrink-0 rounded-lg bg-violet-100 px-2 py-1 text-sm font-bold text-violet-900">
-                    {point(nursery.exposureScore)}
+                    {nursery.nearbyPointCount > 0 ? point(nursery.exposureScore) : "지점 없음"}
                   </span>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">{nursery.type} · 현원 {fmt(nursery.enrollment)}명</p>
+                {nursery.nearbyPointCount === 0 && (
+                  <p className="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900">
+                    100m 내 분석 보행 지점이 없어 위험도를 평가할 수 없습니다. 원본 CSV의 노출점수 0은 안전 판정이 아닙니다.
+                  </p>
+                )}
                 <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
                   <div className="rounded-lg bg-slate-50 p-2"><dt>주변 최고 위험점수</dt><dd className="mt-1 font-bold">{point(nursery.nearbyMaxRisk)}</dd></div>
                   <div className="rounded-lg bg-slate-50 p-2"><dt>주변 평균 위험점수</dt><dd className="mt-1 font-bold">{point(nursery.nearbyMeanRisk)}</dd></div>
