@@ -507,7 +507,11 @@ def delete_admin_session(request: Request, response: Response,
 # =========================================
 
 @app.get("/api/admin/me")
-def admin_me(request: Request, admin_username: str = Depends(require_admin)):
+def admin_me(request: Request, response: Response, admin_username: str = Depends(require_admin)):
+    response.headers["Cache-Control"] = "no-store"
+    if not request.cookies.get(COOKIE_NAME):
+        # Preserve the original HTTP Basic API response for existing API clients.
+        return {"authenticated": True, "username": admin_username}
     data = get_cookie_session(request)
     return {
         "authenticated": True,
