@@ -70,7 +70,7 @@ def _decode(token: str) -> dict:
         if not isinstance(expiry, int) or expiry <= int(time.time()):
             raise ValueError("expired")
         username, password = _admin_credentials()
-        if data.get("user") != username or data.get("pwd") != hashlib.sha256(password.encode()).hexdigest():
+        if data.get("user") != username or data.get("pwd") != hmac.new(_secret(), password.encode(), hashlib.sha256).hexdigest():
             raise ValueError("account changed")
         nonce = data.get("nonce")
         if not isinstance(nonce, str) or not nonce or nonce in _revoked:
