@@ -2,9 +2,9 @@ import type { ChildcareExposureResponse } from "../types/childcare";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
-export async function getChildcareExposure(authHeader: string): Promise<ChildcareExposureResponse> {
+export async function getChildcareExposure(_authSession: string): Promise<ChildcareExposureResponse> {
   const response = await fetch(`${API_BASE_URL}/api/b2g/childcare/exposure`, {
-    headers: { Authorization: authHeader },
+    credentials: "include",
     cache: "no-store",
   });
   if (!response.ok) {
