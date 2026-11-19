@@ -1,6 +1,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { startAdminSession, restoreAdminSession, endAdminSession } from "../services/adminSessionService";
 
 import type { Coordinate } from "../types/route";
 import type { RiskLocation } from "../types/risk";
@@ -52,14 +53,6 @@ const statusLabels: Record<
   rejected: "반려",
 };
 
-// 관리자 인증 헤더
-function makeAuthHeader(
-  username: string,
-  password: string
-): string {
-  return `Basic ${btoa(`${username}:${password}`)}`;
-}
-
 // API 오류 메시지
 async function getErrorMessage(
   response: Response,
@@ -96,6 +89,8 @@ export default function AdminDashboard({
 }: AdminDashboardProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberLogin, setRememberLogin] = useState(false);
+  const csrfToken = useRef<string | null>(null);
 
   const [authorized, setAuthorized] =
     useState(false);
@@ -119,43 +114,42 @@ export default function AdminDashboard({
     useState<string | null>(null);
 
   // 전체 관리자 신고 조회
-  async function fetchAdminReports(
-    user: string,
-    pass: string
-  ): Promise<AdminReport[]> {
-    const response = await fetch(
-      `${API_BASE_URL}/api/admin/reports`,
-      {
-        headers: {
-          Authorization: makeAuthHeader(
-            user,
-            pass
-          ),
-        },
-        cache: "no-store",
-      }
-    );
-
+  async function fetchAdminReports(): Promise<AdminReport[]> {
+    const response = await fetch(`${API_BASE_URL}/api/admin/reports`, {
+      credentials: "include", cache: "no-store",
+    });
     if (!response.ok) {
-      throw new Error(
-        await getErrorMessage(
-          response,
-          "관리자 제보 조회에 실패했습니다."
-        )
-      );
+      throw new Error(await getErrorMessage(response, "관리자 제보 조회에 실패했습니다."));
     }
-
-    const data: unknown =
-      await response.json();
-
-    if (!Array.isArray(data)) {
-      throw new Error(
-        "관리자 제보 응답 형식이 올바르지 않습니다."
-      );
-    }
-
+    const data: unknown = await response.json();
+    if (!Array.isArray(data)) throw new Error("관리자 제보 응답 형식이 올바르지 않습니다.");
     return data as AdminReport[];
   }
+
+  // Restore the cookie session when B2G is reopened or the page is refreshed.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const session = await restoreAdminSession();
+        if (cancelled || !session) return;
+        csrfToken.current = session.csrfToken;
+        const data = await fetchAdminReports();
+        if (cancelled) return;
+        setUsername(session.username);
+        setAdminReports(data);
+        updateNotesFromReports(data);
+        setAuthorized(true);
+        onSessionChange?.("cookie-session");
+        onAuthorizedChange?.(true);
+        onAdminReportsChange?.(data);
+        setMessage("이전 관리자 로그인 상태를 복원했습니다.");
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "관리자 인증 확인 실패");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 검토 의견 초기화
   function updateNotesFromReports(
@@ -185,17 +179,17 @@ export default function AdminDashboard({
     setMessage("");
 
     try {
-      const data = await fetchAdminReports(
-        username,
-        password
-      );
+      const session = await startAdminSession(username, password, rememberLogin);
+      csrfToken.current = session.csrfToken;
+      const data = await fetchAdminReports();
 
       setAdminReports(data);
       updateNotesFromReports(data);
 
       setAuthorized(true);
       onAuthorizedChange?.(true);
-      onSessionChange?.(makeAuthHeader(username, password));
+      onSessionChange?.("cookie-session");
+      setPassword("");
       setMessage(
         "관리자 로그인이 완료되었습니다."
       );
@@ -203,6 +197,7 @@ export default function AdminDashboard({
       // B2G 지도에 전체 신고 전달
       onAdminReportsChange?.(data);
     } catch (err) {
+      csrfToken.current = null;
       setAuthorized(false);
       onAuthorizedChange?.(false);
       onSessionChange?.(null);
@@ -219,29 +214,35 @@ export default function AdminDashboard({
     }
   }
 
-  // 관리자 로그아웃
-  function handleLogout() {
+  // Logout revokes the session and clears all B2G client-side data.
+  async function handleLogout() {
+    setBusy(true);
+    setError("");
+    try {
+      if (csrfToken.current) await endAdminSession(csrfToken.current);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "서버 로그아웃 실패");
+      setBusy(false);
+      return;
+    }
+    csrfToken.current = null;
     onAuthorizedChange?.(false);
     onSessionChange?.(null);
     setAuthorized(false);
     setUsername("");
     setPassword("");
-
+    setRememberLogin(false);
     setAdminReports([]);
     setReviewNotes({});
-
-    // B2G 지도도 공개 신고 상태로 복원
     onAdminReportsChange?.(null);
-
-    setError("");
     setMessage("로그아웃했습니다.");
+    setBusy(false);
   }
 
-  // Logout may also be initiated from the B2G header.
-  // Only react to a nonzero explicit signal, not the initial mount.
+  // Header logout signal (never trigger on the initial mount).
   const lastLogoutSignal = useRef(logoutSignal);
   useEffect(() => {
-    if (logoutSignal > 0 && logoutSignal !== lastLogoutSignal.current) handleLogout();
+    if (logoutSignal > 0 && logoutSignal !== lastLogoutSignal.current) void handleLogout();
     lastLogoutSignal.current = logoutSignal;
   }, [logoutSignal]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -254,10 +255,7 @@ export default function AdminDashboard({
     setMessage("");
 
     try {
-      const data = await fetchAdminReports(
-        username,
-        password
-      );
+      const data = await fetchAdminReports();
 
       setAdminReports(data);
       updateNotesFromReports(data);
@@ -310,12 +308,10 @@ export default function AdminDashboard({
         `${API_BASE_URL}/api/admin/reports/${reportId}`,
         {
           method: "PATCH",
+          credentials: "include",
           headers: {
             "Content-Type": "application/json",
-            Authorization: makeAuthHeader(
-              username,
-              password
-            ),
+            "X-CSRF-Token": csrfToken.current ?? "",
           },
           body: JSON.stringify({
             status,
@@ -438,6 +434,19 @@ export default function AdminDashboard({
             />
           </div>
 
+          <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+            <input type="checkbox" checked={rememberLogin}
+              onChange={event => setRememberLogin(event.target.checked)}
+              className="mt-0.5 shrink-0" />
+            <span><strong>로그인 유지 (최대 7일)</strong>
+              <span className="mt-1 block leading-5">
+                개인 기기에서만 사용하세요. 공용 PC·공유 기기에서는 선택하지 마세요.
+                기기를 사용하는 다른 사람이 관리자 기능에 접근할 수 있습니다.
+                이용 후 반드시 로그아웃하세요.
+              </span>
+            </span>
+          </label>
+
           <button
             type="submit"
             disabled={busy}
@@ -465,9 +474,8 @@ export default function AdminDashboard({
         )}
 
         <p className="text-xs text-gray-500">
-          현재는 로컬 개발용 관리자 인증입니다.
-          외부 배포 전 인증, 세션 및 HTTPS
-          보완이 필요합니다.
+          관리자 세션은 HttpOnly 쿠키로 관리되며 비밀번호는 브라우저 저장소에 보관하지 않습니다.
+          외부 공개 시 HTTPS와 세션 보안 설정이 반드시 필요합니다.
         </p>
       </div>
     );
