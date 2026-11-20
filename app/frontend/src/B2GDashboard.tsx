@@ -278,11 +278,7 @@ export default function B2GDashboard() {
           <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
             <p className="font-bold">관리자 로그인 완료</p>
             <p className="mt-1 text-xs">지자체 분석 패널에서 관리자 대시보드, DBSCAN 입지 추천, 어린이집 보호 우선순위를 이용할 수 있습니다.</p>
-            <button type="button"
-              onClick={() => { setShowDashboard(true); setShowAdminPanel(false); }}
-              className="mt-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">
-              지자체 분석 보기
-            </button>
+            <p className="mt-2 text-xs">관리자 창을 닫아도 상단의 ‘지자체 분석’ 메뉴에서 분석을 확인할 수 있습니다.</p>
           </div>
         )}
         <AdminDashboard

@@ -61,7 +61,7 @@ export default function ChildcareExposurePanel({ data, loading, error, onReload,
             </label>
             <p className="mt-2 text-xs text-slate-500">표시 {fmt(nurseries.length)}곳 · 우선순위 순</p>
           </div>
-          <div className="max-h-[45dvh] space-y-3 overflow-y-auto pr-1">
+          <div className="h-[45dvh] min-h-[180px] space-y-3 overflow-y-auto overscroll-contain pr-1" style={{ overflowAnchor: "none" }}>
             {nurseries.map(nursery => (
               <article key={nursery.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
