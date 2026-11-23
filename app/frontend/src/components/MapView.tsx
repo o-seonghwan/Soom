@@ -107,6 +107,19 @@ function MapClickHandler({
   return null;
 }
 
+// B2G sidebar changes the map's available width; Leaflet must recalculate its size.
+function ResizeB2GMap() {
+  const map = useMap();
+  useEffect(() => {
+    const container = map.getContainer();
+    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false }));
+    observer.observe(container);
+    map.invalidateSize({ pan: false });
+    return () => observer.disconnect();
+  }, [map]);
+  return null;
+}
+
 // 특정 위치로 지도 이동
 function MapFocus({
   point,
@@ -367,6 +380,7 @@ export default function MapView({
         />
 
         <ZoomControl position="bottomright" />
+        {audience === "b2g" && <ResizeB2GMap />}
 
         {/* 지도 입력 및 이동 */}
         <MapClickHandler onMapClick={onMapClick} />
