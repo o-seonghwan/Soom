@@ -139,12 +139,10 @@ export default function B2GDashboard() {
   function focusChildcare(nursery: ChildcareExposure) {
     setSelectedChildcare(nursery);
     setFocusPoint([nursery.lat, nursery.lng]);
-    setShowDashboard(false);
   }
 
   function focusDbscanCandidate(candidate: DbscanCandidate) {
     setFocusPoint([candidate.lat, candidate.lng]);
-    setShowDashboard(false);
   }
 
   // 공개 신고 최신 목록 조회
