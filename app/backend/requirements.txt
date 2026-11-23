@@ -1,0 +1,15 @@
+
+fastapi
+uvicorn
+pydantic
+psycopg[binary]
+python-dotenv
+requests
+networkx
+osmnx
+pyproj
+shapely
+numpy
+pandas
+geopandas
+scipy
