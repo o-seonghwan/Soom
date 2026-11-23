@@ -61,7 +61,7 @@ export default function ChildcareExposurePanel({ data, loading, error, onReload,
             </label>
             <p className="mt-1 text-[11px] text-slate-500">표시 {fmt(nurseries.length)}곳 · 우선순위 순</p>
           </div>
-          <div className="min-h-[180px] space-y-2.5 pr-1" style={{ overflowAnchor: "none" }}>
+          <div className="h-[45dvh] min-h-[180px] space-y-2.5 overflow-y-auto overscroll-contain pr-1" style={{ overflowAnchor: "none" }}>
             {nurseries.map(nursery => (
               <article key={nursery.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
@@ -81,8 +81,8 @@ export default function ChildcareExposurePanel({ data, loading, error, onReload,
                   </p>
                 )}
                 <dl className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
-                  <div className="rounded-lg bg-teal-50 p-2"><dt className="text-[10px] text-slate-700">주변 최고 위험점수</dt><dd className="mt-1 text-lg font-extrabold text-rose-600">{point(nursery.nearbyMaxRisk)}<span className="ml-0.5 text-[10px] font-medium text-slate-600">점</span></dd></div>
-                  <div className="rounded-lg bg-teal-50 p-2"><dt className="text-[10px] text-slate-700">주변 평균 위험점수</dt><dd className="mt-1 text-lg font-extrabold text-rose-600">{point(nursery.nearbyMeanRisk)}<span className="ml-0.5 text-[10px] font-medium text-slate-600">점</span></dd></div>
+                  <div className="rounded-lg bg-teal-50 p-2"><dt className="text-[10px] text-slate-700">주변 최고 위험점수</dt><dd className="mt-1 text-lg font-extrabold text-rose-600">{point(nursery.nearbyMaxRisk)}{nursery.nearbyMaxRisk !== null && <span className="ml-0.5 text-[10px] font-medium text-slate-600">점</span>}</dd></div>
+                  <div className="rounded-lg bg-teal-50 p-2"><dt className="text-[10px] text-slate-700">주변 평균 위험점수</dt><dd className="mt-1 text-lg font-extrabold text-rose-600">{point(nursery.nearbyMeanRisk)}{nursery.nearbyMeanRisk !== null && <span className="ml-0.5 text-[10px] font-medium text-slate-600">점</span>}</dd></div>
                   <div className="rounded-lg bg-teal-50 p-2"><dt className="text-[10px] text-slate-700">주변 보행 분석지점</dt><dd className="mt-1 text-lg font-extrabold text-teal-700">{fmt(nursery.nearbyPointCount)}<span className="ml-0.5 text-[10px] font-medium text-slate-600">곳</span></dd></div>
                   <div className="rounded-lg bg-teal-50 p-2"><dt className="text-[10px] text-slate-700">위험 상위 10% 지점</dt><dd className="mt-1 text-lg font-extrabold text-rose-600">{fmt(nursery.highRiskPointCount)}<span className="ml-0.5 text-[10px] font-medium text-slate-600">곳</span></dd></div>
                 </dl>
