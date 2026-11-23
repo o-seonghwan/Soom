@@ -15,4 +15,4 @@ RUN mkdir -p /app/data/processed/walking_network
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn main:app --app-dir app/backend --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "python app/backend/download_network.py && exec uvicorn main:app --app-dir app/backend --host 0.0.0.0 --port ${PORT:-8000}"]
