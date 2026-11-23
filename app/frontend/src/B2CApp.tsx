@@ -737,7 +737,6 @@ export default function App() {
           onMapClick={handleMapClick}
         />
 
-        {routes.length > 0 && <CleanlinessLegend scope="route" />}
         <button type="button" onClick={() => setShowControls(value => !value)}
           aria-expanded={showControls}
           className="absolute left-3 top-[140px] max-[760px]:top-[240px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
@@ -804,6 +803,12 @@ export default function App() {
           >
             {reportError}
           </p>
+        )}
+
+        {(pageMode === "shortest" || pageMode === "safest") && routes.length > 0 && (
+          <div className="mt-4 border-t border-slate-200 pt-3">
+            <CleanlinessLegend scope="route" embedded />
+          </div>
         )}
 
       </section>

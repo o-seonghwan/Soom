@@ -4,6 +4,7 @@ type LegendScope = "route" | "network";
 
 interface CleanlinessLegendProps {
   scope: LegendScope;
+  embedded?: boolean;
 }
 
 /**
@@ -11,7 +12,7 @@ interface CleanlinessLegendProps {
  * Gray always means no computed model score, not confirmed clean air.
  * A separate B2C swatch explains the inactive route.
  */
-export default function CleanlinessLegend({ scope }: CleanlinessLegendProps) {
+export default function CleanlinessLegend({ scope, embedded = false }: CleanlinessLegendProps) {
   const ranges = [
     { value: 10, label: "0–19" },
     { value: 30, label: "20–39" },
@@ -23,7 +24,9 @@ export default function CleanlinessLegend({ scope }: CleanlinessLegendProps) {
   return (
     <div
       aria-label="숨길AI 예측 청정지수 범례"
-      className="absolute bottom-3 left-3 z-[500] w-[min(360px,calc(100%-24px))] rounded-xl bg-white/95 p-3 text-xs shadow-lg"
+      className={embedded
+        ? "w-full min-w-0 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-sm"
+        : "absolute bottom-3 left-3 z-[500] w-[min(360px,calc(100%-24px))] rounded-xl bg-white/95 p-3 text-xs shadow-lg"}
     >
       <p className="font-bold text-slate-800">숨길AI 예측 청정지수</p>
       <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11px] font-semibold leading-4 text-amber-950">

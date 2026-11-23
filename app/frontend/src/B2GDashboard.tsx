@@ -139,12 +139,10 @@ export default function B2GDashboard() {
   function focusChildcare(nursery: ChildcareExposure) {
     setSelectedChildcare(nursery);
     setFocusPoint([nursery.lat, nursery.lng]);
-    setShowDashboard(false);
   }
 
   function focusDbscanCandidate(candidate: DbscanCandidate) {
     setFocusPoint([candidate.lat, candidate.lng]);
-    setShowDashboard(false);
   }
 
   // 공개 신고 최신 목록 조회
@@ -311,96 +309,97 @@ export default function B2GDashboard() {
         />
       </aside>
 
-      {/* B2G 지도 */}
-      <main className="relative min-h-0 flex-1">
-        <MapView
-          audience="b2g"
-          start={null}
-          end={null}
-          routes={[]}
-          risks={risks}
-          cleanlinessEdges={cleanEdges}
-          dbscanSites={dbscanSites}
-          showDbscanSites={adminAuthorized && analysisTab === "dbscan" && dbscanSites !== null}
-          selectedDbscanCluster={selectedDbscanCluster ?? ""}
-          selectedChildcare={adminAuthorized && analysisTab === "childcare" ? selectedChildcare : null}
-          reports={visibleReports}
-          showRisks={showRisks}
-          showReports={showReports}
-          onToggleCleanliness={() => setShowRisks(value => !value)}
-          onToggleReports={() => setShowReports(value => !value)}
-          reportLocation={null}
-          focusPoint={focusPoint}
-          onMapClick={() => {
-            // B2G는 지도 클릭으로
-            // 경로 및 신고 위치를 입력하지 않음
-          }}
-        />
-
-        {showRisks && cleanEdges.length > 0 && <CleanlinessLegend scope="network" />}
-        {/* Administrator-only local-government analytics entry. */}
+      {/* Tabs and analysis content share one fixed-width sidebar. */}
+      <main className="flex min-h-0 flex-1">
         {adminAuthorized && (
-          <button type="button" onClick={() => setShowDashboard(value => !value)}
-            aria-expanded={showDashboard}
-            className="absolute left-3 top-3 z-[1050] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-bold text-slate-700 shadow-lg">
-            {showDashboard ? "지자체 분석 닫기 ×" : "지자체 분석 ☰"}
-          </button>
+          <div className="flex h-full w-[min(320px,72vw)] shrink-0 flex-col overflow-hidden rounded-t-xl border-r border-slate-200 bg-white">
+            <nav aria-label="지자체 분석 메뉴" className="z-[900] shrink-0 overflow-hidden rounded-t-xl border-b border-slate-200 bg-white">
+              <div role="tablist" aria-label="지자체 분석 탭" className="grid min-w-0 grid-cols-3 gap-0">
+                {([
+                  ["reports", "관리자 대시보드"],
+                  ["childcare", "어린이집 보호 우선순위"],
+                  ["dbscan", "DBSCAN 입지 추천"],
+                ] as const).map(([tab, label]) => (
+                  <button key={tab} type="button" role="tab"
+                    aria-selected={showDashboard && analysisTab === tab}
+                    onClick={() => { selectAnalysisTab(tab); setShowDashboard(true); }}
+                    className={`min-w-0 rounded-t-md px-0.5 py-2 text-center text-[10px] font-semibold leading-tight transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${showDashboard && analysisTab === tab ? "bg-teal-100 text-teal-900" : "bg-slate-50 text-slate-700 hover:bg-slate-100"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </nav>
+            {showDashboard && (
+              <aside aria-label="지자체 분석" className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5">
+                <div className="mb-2 flex justify-end">
+                  <button type="button" onClick={() => setShowDashboard(false)}
+                    aria-label="분석 패널 접기"
+                    className="rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-600 hover:bg-slate-50">
+                    패널 접기
+                  </button>
+                </div>
+                {analysisTab === "reports" ? (
+                  <div role="tabpanel" aria-label="관리자 대시보드" ref={setDashboardTarget} />
+                ) : analysisTab === "dbscan" ? (
+                  <div role="tabpanel" aria-label="DBSCAN 입지 추천">
+                    <DbscanSitePanel
+                      data={dbscanSites}
+                      loading={dbscanLoading}
+                      error={dbscanError}
+                      selectedCluster={selectedDbscanCluster ?? ""}
+                      onClusterChange={setSelectedDbscanCluster}
+                      onFocus={focusDbscanCandidate}
+                      onReload={() => void loadDbscanSites()}
+                    />
+                  </div>
+                ) : (
+                  <div role="tabpanel" aria-label="어린이집 보호 우선순위">
+                    <ChildcareExposurePanel
+                      data={childcareData}
+                      loading={childcareLoading}
+                      error={childcareError}
+                      onReload={() => void loadChildcareExposure()}
+                      onFocus={focusChildcare}
+                    />
+                  </div>
+                )}
+                </div>
+                {showRisks && cleanEdges.length > 0 && (
+                  <div className="max-h-[42%] shrink-0 overflow-y-auto overscroll-contain border-t border-slate-200 bg-white p-2">
+                    <CleanlinessLegend scope="network" embedded />
+                  </div>
+                )}
+              </aside>
+            )}
+          </div>
         )}
-        {adminAuthorized && showDashboard && (
-        <section aria-label="지자체 분석"
-          className="absolute left-3 top-[64px] z-[1000] max-h-[min(80dvh,calc(100%-80px))] w-[min(420px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-xl">
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">지자체 분석</h2>
-            <p className="mt-1 text-xs text-slate-500">
-              관리자 제보 검토, 흡연시설 입지 추천, 어린이집 보호 우선순위를 확인합니다.
-            </p>
-          </div>
-          <div role="tablist" aria-label="지자체 분석 메뉴" className="my-5 flex flex-wrap gap-3">
-            <button type="button" role="tab" aria-selected={analysisTab === "reports"}
-              onClick={() => selectAnalysisTab("reports")}
-              className={`rounded-lg px-4 py-3 text-sm font-bold ${analysisTab === "reports" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-700"}`}>
-              관리자 대시보드
-            </button>
-            <button type="button" role="tab" aria-selected={analysisTab === "dbscan"}
-              onClick={() => selectAnalysisTab("dbscan")}
-              className={`rounded-lg px-4 py-3 text-sm font-bold ${analysisTab === "dbscan" ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-700"}`}>
-              DBSCAN 입지 추천
-            </button>
-            <button type="button" role="tab" aria-selected={analysisTab === "childcare"}
-              onClick={() => selectAnalysisTab("childcare")}
-              className={`rounded-lg px-4 py-3 text-sm font-bold ${analysisTab === "childcare" ? "bg-violet-700 text-white" : "bg-slate-100 text-slate-700"}`}>
-              어린이집 보호 우선순위
-            </button>
-          </div>
-          {analysisTab === "reports" ? (
-            <div role="tabpanel" aria-label="관리자 대시보드" ref={setDashboardTarget} />
-          ) : analysisTab === "dbscan" ? (
-            <div role="tabpanel" aria-label="DBSCAN 입지 추천">
-              <DbscanSitePanel
-                data={dbscanSites}
-                loading={dbscanLoading}
-                error={dbscanError}
-                selectedCluster={selectedDbscanCluster ?? ""}
-                onClusterChange={setSelectedDbscanCluster}
-                onFocus={focusDbscanCandidate}
-                onReload={() => void loadDbscanSites()}
-              />
-            </div>
-          ) : (
-            <div role="tabpanel" aria-label="어린이집 보호 우선순위">
-              <ChildcareExposurePanel
-                data={childcareData}
-                loading={childcareLoading}
-                error={childcareError}
-                onReload={() => void loadChildcareExposure()}
-                onFocus={focusChildcare}
-              />
-            </div>
-          )}
-        </section>
-      )}
+        {/* Map takes only the remaining horizontal space. */}
+        <div className="relative min-w-0 flex-1">
+            <MapView
+              audience="b2g"
+              start={null}
+              end={null}
+              routes={[]}
+              risks={risks}
+              cleanlinessEdges={cleanEdges}
+              dbscanSites={dbscanSites}
+              showDbscanSites={adminAuthorized && analysisTab === "dbscan" && dbscanSites !== null}
+              selectedDbscanCluster={selectedDbscanCluster ?? ""}
+              selectedChildcare={adminAuthorized && analysisTab === "childcare" ? selectedChildcare : null}
+              reports={visibleReports}
+              showRisks={showRisks}
+              showReports={showReports}
+              onToggleCleanliness={() => setShowRisks(value => !value)}
+              onToggleReports={() => setShowReports(value => !value)}
+              reportLocation={null}
+              focusPoint={focusPoint}
+              onMapClick={() => {
+                // B2G는 지도 클릭으로 경로 및 신고 위치를 입력하지 않음
+              }}
+            />
+        </div>
       </main>
-
 
     </div>
   );
