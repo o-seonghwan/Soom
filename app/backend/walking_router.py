@@ -5,6 +5,7 @@ import networkx as nx
 import osmnx as ox
 
 from pyproj import Transformer
+from shapely import wkt
 from shapely.geometry import LineString, Point
 from shapely.ops import substring
 
@@ -57,7 +58,30 @@ def load_walking_graph():
 
     print("강남구 보행 네트워크 로딩 중...", flush=True)
 
-    graph = ox.load_graphml(filepath=GRAPH_PATH)
+    try:
+        # OSMnx에서 자체 생성한 원본 GraphML은 기존 방식으로 읽는다.
+        graph = ox.load_graphml(filepath=GRAPH_PATH)
+    except AttributeError as error:
+        if "startswith" not in str(error):
+            raise
+
+        # 서울시 보행 네트워크를 NetworkX로 저장한 GraphML은
+        # 노드의 x/y가 실수로 저장돼 OSMnx 로더가 실패할 수 있다.
+        # 원본 그래프는 수정하지 않고 형식만 변환한다.
+        print("서울시 GraphML 호환 로더 사용", flush=True)
+        graph = nx.read_graphml(GRAPH_PATH, force_multigraph=True)
+        if not graph.is_directed():
+            raise ValueError("보행 그래프는 방향 그래프여야 합니다.")
+
+        for node, attributes in graph.nodes(data=True):
+            attributes["x"] = float(attributes["x"])
+            attributes["y"] = float(attributes["y"])
+
+        for _u, _v, _key, attributes in graph.edges(keys=True, data=True):
+            attributes["length"] = float(attributes["length"])
+            geometry = attributes.get("geometry")
+            if isinstance(geometry, str):
+                attributes["geometry"] = wkt.loads(geometry)
 
     # 위경도 그래프를 거리 계산용 투영 좌표계로 변환
     graph = ox.project_graph(
