@@ -63,5 +63,26 @@ jobs:
           print("PROXIED AI RISKS", status, edges.get("summary"))
           assert status == 200 and edges.get("source") == "model-csv"
 
+          # Verify a real POST is forwarded through the frontend's /api/ proxy.
+          import urllib.request
+          route_payload = json.dumps({
+              "start": [37.498417, 127.028292],
+              "end": [37.504937, 127.035184],
+              "avoidanceLevel": 100,
+          }).encode("utf-8")
+          req = urllib.request.Request(
+              root + "/api/routes",
+              data=route_payload,
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urlopen(req, timeout=90) as response:
+              routes = json.load(response).get("routes", [])
+              print("PROXIED POST ROUTES", response.status,
+                    [(r.get("id"), r.get("distanceM")) for r in routes])
+              assert response.status == 200
+              assert len(routes) == 2
+              assert {r.get("id") for r in routes} == {"shortest", "safest"}
+
           print("SOOM_FRONTEND_PUBLIC_SMOKE_PASS")
           PY
