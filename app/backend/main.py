@@ -109,7 +109,7 @@ async def lifespan(app: FastAPI):
 # =========================================
 
 app = FastAPI(
-    title="폐(Lung) 끼치지 마세요 - 강남구 API",
+    title="숨길 - 강남구 API",
     version="0.6.0",
     lifespan=lifespan,
 )
