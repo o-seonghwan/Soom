@@ -83,5 +83,36 @@ jobs:
                       if isinstance(value, (int, float, str, bool))
                   })
 
+          # Compare real route exposure using length-weighted known edge scores.
+          # Unknown segments are excluded rather than classified as clean.
+          from math import radians, sin, cos, asin, sqrt
+          def meters(a, b):
+              lat1, lon1 = map(radians, a)
+              lat2, lon2 = map(radians, b)
+              h = sin((lat2 - lat1) / 2) ** 2 + cos(lat1) * cos(lat2) * sin((lon2 - lon1) / 2) ** 2
+              return 12742000 * asin(min(1.0, sqrt(h)))
+
+          def measured_cleanliness(route):
+              total_length = 0.0
+              known_length = 0.0
+              clean_x_length = 0.0
+              for segment in route.get("segments", []):
+                  coords = segment.get("coordinates", [])
+                  length = sum(meters(a, b) for a, b in zip(coords, coords[1:]))
+                  total_length += length
+                  clean = segment.get("cleanIndex")
+                  if clean is not None:
+                      known_length += length
+                      clean_x_length += float(clean) * length
+              return {
+                  "knownCoveragePct": round(100 * known_length / total_length, 2) if total_length else None,
+                  "weightedCleanIndex": round(clean_x_length / known_length, 3) if known_length else None,
+              }
+
+          _, high = request("POST", "/api/routes",
+              {"start": start, "end": end, "avoidanceLevel": 100})
+          for route in high["routes"]:
+              print("ROUTE_EXPOSURE", route["id"], measured_cleanliness(route))
+
           print("SOOM_PUBLIC_API_SMOKE_PASS")
           PY
