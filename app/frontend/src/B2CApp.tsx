@@ -116,7 +116,7 @@ export default function App() {
       return;
     }
     const agreed = window.confirm(
-      "숨구리당당에서 내 위치를 지도에 표시하기 위해 위치 정보 사용에 동의하시겠습니까? 동의하면 B2C 이용 중 위치가 갱신되며, 지도는 현재 위치 버튼을 누를 때만 이동합니다."
+      "숨길에서 내 위치를 지도에 표시하기 위해 위치 정보 사용에 동의하시겠습니까? 동의하면 B2C 이용 중 위치가 갱신되며, 지도는 현재 위치 버튼을 누를 때만 이동합니다."
     );
     locationConsentRef.current = agreed;
     setLocationTrackingEnabled(agreed);
@@ -689,7 +689,7 @@ export default function App() {
       {/* 기존 헤더 유지 */}
       <header className="z-[1000] bg-white px-5 py-4 shadow-sm">
         <h1 className="text-xl font-bold text-green-700">
-          숨구리당당
+          숨길
         </h1>
 
         <p className="text-xs text-gray-500">
