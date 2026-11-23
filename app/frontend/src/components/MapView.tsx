@@ -266,8 +266,6 @@ export default function MapView({
   reportLocation,
   focusPoint,
   selectionMode = "start",
-  startAddress,
-  endAddress,
   routeLoading = false,
   onSearch,
   onSelectLocation,
