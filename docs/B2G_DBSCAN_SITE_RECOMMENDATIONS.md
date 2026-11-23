@@ -28,7 +28,8 @@
 분석 코드를 로컬에서 별도로 실행해 실제 CSV를 생성하세요.
 
 ```powershell
-cd "C:\Users\asia\Desktop\semi 1\do_not_lung\Projects\do_not_lung"
+$repo = (git rev-parse --show-toplevel).Trim()
+Set-Location $repo
 python "notebooks/03_modeling/1_모델학습/4_B2G_흡연구역_입지후보.py"
 ```
 

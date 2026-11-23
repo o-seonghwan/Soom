@@ -240,7 +240,7 @@ export default function B2GDashboard() {
       {/* B2G 헤더 */}
       <header className="z-[1000] bg-white px-5 py-4 shadow-sm">
         <h1 className="pr-44 text-xl font-bold text-slate-800">
-          숨구리당당
+          숨길
         </h1>
 
         <p className="mt-1 text-xs text-gray-500">

@@ -17,7 +17,7 @@ export default function App() {
         <div className="w-full max-w-4xl">
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold text-green-800">
-              숨구리당당
+              숨길
             </h1>
 
             <p className="mt-3 text-gray-600">
