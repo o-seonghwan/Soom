@@ -102,4 +102,16 @@ async def guard_graph_routes(request: Request, call_next):
     return await call_next(request)
 
 
+@app.get("/", include_in_schema=False)
+def service_home(request: Request):
+    """Human-readable entry point for the public backend domain."""
+    return {
+        "service": "Soom API",
+        "status": "running",
+        "graph_loaded": request.app.state.walking_graph is not None,
+        "health": "/api/health",
+        "docs": "/docs",
+    }
+
+
 app.router.lifespan_context = responsive_lifespan
