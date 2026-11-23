@@ -70,7 +70,7 @@ export default function ChildcareExposurePanel({ data, loading, error, onReload,
                     <h4 className="mt-1 text-sm font-bold text-slate-900">{nursery.name}</h4>
                     <p className="mt-1 text-[11px] leading-4 text-slate-600">{nursery.address}</p>
                   </div>
-                  <span className={`shrink-0 rounded-lg px-2 py-1 text-sm font-extrabold text-white ${nursery.nearbyPointCount === 0 ? "bg-slate-500" : nursery.exposureScore >= 90 ? "bg-rose-600" : nursery.exposureScore >= 70 ? "bg-orange-500" : "bg-teal-600"}`}>
+                  <span className={`shrink-0 rounded-lg px-2 py-1 text-sm font-extrabold text-white ${nursery.nearbyPointCount === 0 ? "bg-slate-500" : nursery.priorityRank === 1 ? "bg-rose-600" : nursery.priorityRank === 2 ? "bg-orange-500" : "bg-teal-600"}`}>
                     {nursery.nearbyPointCount > 0 ? point(nursery.exposureScore) : "지점 없음"}
                   </span>
                 </div>
