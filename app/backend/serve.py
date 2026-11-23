@@ -47,21 +47,32 @@ async def prepare_graph():
             if snapshot["source"] == "model-csv" and not edge_risks:
                 raise ValueError("모델 CSV가 보행 링크와 매칭되지 않았습니다.")
 
-            cleanliness = await asyncio.to_thread(
-                edge_cleanliness_geojson, graph, edge_risks
-            )
-
-            app.state.walking_graph = graph
+            # Route readiness does not depend on generating every B2G GeoJSON
+            # feature. Publish the validated graph and risk mapping first.
             app.state.edge_risks = edge_risks
-            app.state.b2g_cleanliness = cleanliness
+            app.state.walking_graph = graph
             summary = summarize_edge_risks(graph=graph, edge_risks=edge_risks)
-            logger.info(
+            logger.warning(
                 "GraphML ready: nodes=%d edges=%d affected=%d source=%s",
                 len(graph.nodes),
                 len(graph.edges),
                 summary["affectedEdges"],
                 snapshot["source"],
             )
+
+            # B2G-only serialization can be expensive on large city graphs.
+            # Its failure must not disable B2C walking routes.
+            try:
+                cleanliness = await asyncio.to_thread(
+                    edge_cleanliness_geojson, graph, edge_risks
+                )
+                app.state.b2g_cleanliness = cleanliness
+                logger.warning(
+                    "B2G GeoJSON ready: features=%d",
+                    len(cleanliness["features"]),
+                )
+            except Exception:
+                logger.exception("B2G GeoJSON initialization failed")
             return
         except Exception:
             logger.exception("GraphML initialization failed; retrying")
@@ -72,7 +83,7 @@ async def prepare_graph():
 async def responsive_lifespan(application):
     application.state.walking_graph = None
     application.state.edge_risks = {}
-    application.state.b2g_cleanliness = {"type": "FeatureCollection", "features": []}
+    application.state.b2g_cleanliness = None
     application.state.risk_snapshot = get_risk_snapshot()
 
     task = asyncio.create_task(prepare_graph())
@@ -89,8 +100,10 @@ async def responsive_lifespan(application):
 @app.middleware("http")
 async def guard_graph_routes(request: Request, call_next):
     if (
-        request.url.path in GRAPH_REQUIRED_PATHS
-        and request.app.state.walking_graph is None
+        (request.url.path in GRAPH_REQUIRED_PATHS
+         and request.app.state.walking_graph is None)
+        or (request.url.path == "/api/b2g/cleanliness/edges"
+            and request.app.state.b2g_cleanliness is None)
     ):
         return JSONResponse(
             status_code=503,
