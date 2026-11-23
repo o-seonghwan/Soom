@@ -1,4 +1,5 @@
 
+import os
 from pathlib import Path
 
 import networkx as nx
@@ -15,13 +16,20 @@ from shapely.ops import substring
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
-GRAPH_PATH = (
+# 기존 로컬 개발용 보행 그래프 경로
+DEFAULT_GRAPH_PATH = (
     BASE_DIR
     / "data"
     / "processed"
     / "walking_network"
     / "gangnam_walk.graphml"
 )
+
+# 환경변수가 설정되면 해당 경로 사용
+# 설정되지 않으면 기존 로컬 경로 유지
+GRAPH_PATH = Path(
+    os.getenv("LUNG_GRAPH_PATH") or str(DEFAULT_GRAPH_PATH)
+).expanduser()
 
 # 클릭 위치와 가장 가까운 보행 링크 사이 허용 거리
 MAX_SNAP_DISTANCE_M = 200
@@ -418,10 +426,13 @@ def link_clean_index(edge_risks, u, v, key, edge_data):
     """The model score belongs to the exact directed walking link."""
     if not edge_risks:
         return None
+
     source = edge_data.get("source_edge", (u, v, key))
     risk = edge_risks.get(tuple(source))
+
     if risk is None or risk.get("cleanIndex") is None:
         return None
+
     return round(float(risk["cleanIndex"]), 2)
 
 
@@ -480,7 +491,9 @@ def route_to_coordinates(
         # Keep each original edge geometry separate for correct color boundaries.
         segments.append({
             "coordinates": segment,
-            "cleanIndex": link_clean_index(edge_risks, u, v, key, edge),
+            "cleanIndex": link_clean_index(
+                edge_risks, u, v, key, edge
+            ),
         })
 
         # 중복되는 경로 연결점 제거
@@ -503,7 +516,12 @@ def route_to_coordinates(
 # 8. A* 일반 최단경로 계산
 # =====================================================
 
-def calculate_shortest_route(graph, start, end, edge_risks=None):
+def calculate_shortest_route(
+    graph,
+    start,
+    end,
+    edge_risks=None,
+):
     """
     강남구 보행 링크 기반 A* 최단경로.
 

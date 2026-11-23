@@ -1,0 +1,25 @@
+
+# FastAPI 웹 서버
+fastapi
+uvicorn
+
+# PostgreSQL 연결
+psycopg[binary]
+python-dotenv
+
+# 외부 API 요청
+requests
+
+# 보행 네트워크와 경로 탐색
+networkx
+osmnx
+
+# 공간 좌표 및 지오메트리 계산
+pyproj
+shapely
+
+# OSMnx 의존성과 수치 데이터 처리
+numpy
+pandas
+geopandas
+scipy

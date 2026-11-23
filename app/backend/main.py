@@ -1,10 +1,13 @@
 
+import os
+
 from contextlib import asynccontextmanager
 from typing import Literal
 from uuid import UUID
 
 import networkx as nx
 import psycopg
+import requests
 
 from fastapi import (
     Depends,
@@ -28,8 +31,11 @@ from dbscan_sites import load_dbscan_sites
 from childcare_exposure import load_childcare_exposure
 from risk_provider import get_risk_snapshot
 from smoking_zones import load_smoking_zones
-from address_lookup import reverse_address, search_addresses, forward_address
-import requests
+from address_lookup import (
+    reverse_address,
+    search_addresses,
+    forward_address,
+)
 
 from risk_mapper import (
     map_risks_to_edges,
@@ -79,7 +85,10 @@ async def lifespan(app: FastAPI):
     app.state.walking_graph = graph
     app.state.risk_snapshot = snapshot
     app.state.edge_risks = edge_risks
-    app.state.b2g_cleanliness = edge_cleanliness_geojson(graph, edge_risks)
+    app.state.b2g_cleanliness = edge_cleanliness_geojson(
+        graph,
+        edge_risks,
+    )
 
     summary = summarize_edge_risks(
         graph=graph,
@@ -90,10 +99,12 @@ async def lifespan(app: FastAPI):
         f"위험 위치: {len(snapshot['locations'])}개",
         flush=True,
     )
+
     print(
         f"위험 영향 링크: {summary['affectedEdges']}개",
         flush=True,
     )
+
     print("시스템 초기화 완료", flush=True)
 
     yield
@@ -114,14 +125,37 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+# =========================================
+# 2-1. CORS 설정
+# =========================================
+
+# 기존 로컬 개발 환경 허용
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+# 배포된 프론트엔드 주소
+# 예: https://do-not-lung.vercel.app
+frontend_url = os.getenv(
+    "FRONTEND_URL",
+    "",
+).strip().rstrip("/")
+
+# 설정된 주소가 있으면 허용 목록에 추가
+if frontend_url and frontend_url not in allowed_origins:
+    allowed_origins.append(frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PATCH"],
+    allow_methods=[
+        "GET",
+        "POST",
+        "PATCH",
+    ],
     allow_headers=[
         "Content-Type",
         "Authorization",
@@ -142,8 +176,14 @@ class RouteRequest(BaseModel):
         description="[위도, 경도]"
     )
 
-    # Numeric 0..100 for continuous slider; legacy enum kept for compatibility.
-    avoidanceLevel: float | Literal["low", "medium", "high"] = Field(default=50, description="0~100 회피 강도")
+    # Numeric 0..100 for continuous slider;
+    # legacy enum kept for compatibility.
+    avoidanceLevel: float | Literal[
+        "low", "medium", "high"
+    ] = Field(
+        default=50,
+        description="0~100 회피 강도",
+    )
 
 
 # =========================================
@@ -296,9 +336,15 @@ def reverse_address_api(lat: float, lng: float):
     try:
         return reverse_address(lat, lng)
     except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+        ) from error
     except requests.RequestException as error:
-        raise HTTPException(status_code=503, detail="주소 조회 서비스 연결에 실패했습니다.") from error
+        raise HTTPException(
+            status_code=503,
+            detail="주소 조회 서비스 연결에 실패했습니다.",
+        ) from error
 
 
 @app.get("/api/search-addresses")
@@ -306,11 +352,20 @@ def search_addresses_api(q: str):
     try:
         return {"suggestions": search_addresses(q)}
     except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+        ) from error
     except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(
+            status_code=503,
+            detail=str(error),
+        ) from error
     except requests.RequestException as error:
-        raise HTTPException(status_code=503, detail="주소 검색 서비스에 연결하지 못했습니다.") from error
+        raise HTTPException(
+            status_code=503,
+            detail="주소 검색 서비스에 연결하지 못했습니다.",
+        ) from error
 
 
 @app.get("/api/geocode-address")
@@ -318,13 +373,25 @@ def geocode_address_api(q: str):
     try:
         return forward_address(q)
     except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+        ) from error
     except LookupError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise HTTPException(
+            status_code=404,
+            detail=str(error),
+        ) from error
     except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(
+            status_code=503,
+            detail=str(error),
+        ) from error
     except requests.RequestException as error:
-        raise HTTPException(status_code=503, detail="주소 변환 서비스에 연결하지 못했습니다.") from error
+        raise HTTPException(
+            status_code=503,
+            detail="주소 변환 서비스에 연결하지 못했습니다.",
+        ) from error
 
 
 @app.get("/api/smoking-zones")
@@ -333,7 +400,10 @@ def smoking_zones():
     try:
         return load_smoking_zones()
     except (ValueError, FileNotFoundError) as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(
+            status_code=503,
+            detail=str(error),
+        ) from error
 
 
 @app.get("/api/risks")
@@ -342,27 +412,39 @@ def get_risks(request: Request):
 
 
 @app.get("/api/b2g/dbscan/sites")
-def get_b2g_dbscan_sites(admin_username: str = Depends(require_admin)):
+def get_b2g_dbscan_sites(
+    admin_username: str = Depends(require_admin)
+):
     """Return existing DBSCAN CSV outputs only; never synthesize site suggestions."""
     try:
         return load_dbscan_sites()
     except (ValueError, FileNotFoundError) as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(
+            status_code=503,
+            detail=str(error),
+        ) from error
 
 
 @app.get("/api/b2g/childcare/exposure")
-def get_b2g_childcare_exposure(admin_username: str = Depends(require_admin)):
+def get_b2g_childcare_exposure(
+    admin_username: str = Depends(require_admin)
+):
     """Only return the previously generated childcare ranking CSV."""
     try:
         return load_childcare_exposure()
     except (ValueError, FileNotFoundError) as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(
+            status_code=503,
+            detail=str(error),
+        ) from error
 
 
 @app.get("/api/b2g/cleanliness/edges")
 def get_b2g_cleanliness_edges(request: Request):
     """B2G visualization must use actual model results, never Mock scores."""
+
     snapshot = request.app.state.risk_snapshot
+
     if snapshot["source"] != "model-csv":
         raise HTTPException(
             status_code=503,
@@ -372,6 +454,7 @@ def get_b2g_cleanliness_edges(request: Request):
                 "백엔드를 재시작하세요."
             ),
         )
+
     return {
         **request.app.state.b2g_cleanliness,
         "source": "model-csv",
