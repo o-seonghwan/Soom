@@ -1,0 +1,87 @@
+name: Soom public API smoke test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/soom-api-smoke.yml"
+      - "app/backend/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/soom-api-smoke.yml"
+      - "app/backend/**"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check production health and real route computations
+        env:
+          SOOM_API: https://soom-backend-production.up.railway.app
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+
+          base = os.environ["SOOM_API"]
+          start = [37.498417, 127.028292]
+          end = [37.504937, 127.035184]
+
+          def request(method, path, payload=None, timeout=100):
+              data = None if payload is None else json.dumps(payload).encode("utf-8")
+              req = urllib.request.Request(
+                  base + path, data=data, method=method,
+                  headers={"Content-Type": "application/json"},
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=timeout) as res:
+                      body = res.read().decode("utf-8")
+                      return res.status, json.loads(body)
+              except urllib.error.HTTPError as exc:
+                  print(f"HTTP ERROR {method} {path}: {exc.code} {exc.read().decode('utf-8')[:1200]}")
+                  raise
+
+          for attempt in range(4):
+              code, health = request("GET", "/api/health", timeout=20)
+              print("HEALTH", code, health)
+              if health.get("graph_loaded") is True:
+                  break
+              if attempt == 3:
+                  raise AssertionError("GraphML is not loaded")
+              time.sleep(10)
+
+          assert health.get("risk_source") == "model-csv", "Expected AI risk CSV, not mock"
+          code, edges = request("GET", "/api/risks/edges?limit=3", timeout=100)
+          assert code == 200 and edges["source"] == "model-csv"
+          print("RISK EDGE SUMMARY", edges.get("summary"))
+
+          for endpoint, level, expected in [
+              ("/api/routes/shortest", 0, 1),
+              ("/api/routes", 0, 2),
+              ("/api/routes", 100, 2),
+          ]:
+              code, result = request(
+                  "POST", endpoint,
+                  {"start": start, "end": end, "avoidanceLevel": level},
+              )
+              routes = result.get("routes", [])
+              assert code == 200 and len(routes) == expected, (
+                  f"{endpoint}, avoidance={level}: {str(result)[:1000]}"
+              )
+              print("ROUTES", endpoint, "level", level,
+                    "count", len(routes), "route_keys",
+                    [list(route.keys()) for route in routes])
+              for route in routes:
+                  print("ROUTE METRICS", {
+                      key: value for key, value in route.items()
+                      if isinstance(value, (int, float, str, bool))
+                  })
+
+          print("SOOM_PUBLIC_API_SMOKE_PASS")
+          PY
