@@ -60,10 +60,10 @@ export default function B2GDashboard() {
   const [focusPoint, setFocusPoint] =
     useState<Coordinate | null>(null);
 
-  const [loading, setLoading] =
+  const [, setLoading] =
     useState(true);
 
-  const [error, setError] =
+  const [, setError] =
     useState("");
 
   // The authenticated session is supplied by the already-mounted login controller.
