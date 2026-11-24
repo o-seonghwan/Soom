@@ -30,7 +30,9 @@ def _number(row, key, index, integer=False, required=True):
 
 def load_childcare_exposure():
     configured = os.environ.get("LUNG_CHILDCARE_EXPOSURE_CSV", "").strip()
-    path = Path(configured).expanduser().resolve() if configured else DEFAULT_CSV
+    volume = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
+    path = (Path(configured).expanduser().resolve() if configured else
+            Path(volume) / "3_어린이집_노출순위.csv" if volume else DEFAULT_CSV)
     if not path.is_file():
         raise FileNotFoundError(
             f"어린이집 노출순위 CSV가 없습니다: {path}. "
