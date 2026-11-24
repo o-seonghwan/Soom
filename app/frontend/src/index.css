@@ -140,3 +140,18 @@ body {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* Prevent iOS input-focus page zoom while leaving Leaflet gestures active. */
+@media (max-width: 760px) {
+  .soom-b2c-screen input:not([type="range"]),
+  .soom-b2c-screen textarea,
+  .soom-b2c-screen select {
+    font-size: 16px;
+  }
+  .soom-b2c-screen {
+    touch-action: manipulation;
+  }
+  .soom-mobile-map .leaflet-container {
+    touch-action: none;
+  }
+}
