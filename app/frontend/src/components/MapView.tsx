@@ -270,6 +270,7 @@ export default function MapView({
   onCloseRiskNotice,
   reportLocation,
   focusPoint,
+  addressLookupNotice,
   selectionMode = "start",
   routeLoading = false,
   onSearch,
