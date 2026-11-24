@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import MapView from "./components/MapView";
 import ReportForm from "./components/ReportForm";
 import RouteResultPanel from "./components/RouteResultPanel";
+import RoutePanel from "./components/RoutePanel";
 import MobileB2CSheet from "./components/MobileB2CSheet";
 import { lookupAddress } from "./services/addressService";
 import { geocodeAddress, type AddressSuggestion } from "./services/addressSearchService";
@@ -768,7 +769,10 @@ export default function App() {
         )}
 
         {pageMode === "safest" && (
-          <RouteResultPanel type="safest" route={routes.find(route => route.id !== "shortest")} />
+          <div className="space-y-3">
+            <RoutePanel avoidanceLevel={avoidanceLevel} onAvoidanceLevelChange={handleAvoidanceLevelChange} />
+            <RouteResultPanel type="safest" route={routes.find(route => route.id !== "shortest")} />
+          </div>
         )}
 
         {loading && <p role="status" className="mt-3 text-xs text-slate-600">경로 계산 중... {elapsedSeconds.toFixed(1)}초</p>}
