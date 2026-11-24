@@ -86,15 +86,6 @@ export default function MobileB2CSheet({
       </button>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-3">
-        {pageMode === "safest" && heightMode !== "peek" && (
-          <div className="mb-3">
-            <RoutePanel
-              avoidanceLevel={avoidanceLevel}
-              onAvoidanceLevelChange={onAvoidanceLevelChange}
-            />
-          </div>
-        )}
-
         <div role="tablist" aria-label="모바일 경로 메뉴" className="mb-2 grid shrink-0 grid-cols-3 gap-1.5">
           {([
             ["shortest", "최단 경로"],
@@ -108,6 +99,16 @@ export default function MobileB2CSheet({
             </button>
           ))}
         </div>
+
+        {/* Keep the tab row fixed above the avoidance control across all tabs. */}
+        {pageMode === "safest" && heightMode !== "peek" && (
+          <div className="mb-3">
+            <RoutePanel
+              avoidanceLevel={avoidanceLevel}
+              onAvoidanceLevelChange={onAvoidanceLevelChange}
+            />
+          </div>
+        )}
 
         {pageMode === "report" ? (
           <div role="tabpanel" aria-label="흡연 제보 입력" className="min-h-0 space-y-2">
