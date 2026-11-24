@@ -1,0 +1,49 @@
+name: Public VWorld API diagnostics
+
+on:
+  pull_request:
+    paths: [".github/workflows/soom-vworld-diagnostic.yml"]
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Check public API responses without credentials
+        run: |
+          python - <<'PY'
+          import json
+          from urllib.request import urlopen
+          from urllib.error import HTTPError
+          from urllib.parse import urlencode
+
+          site="https://soom-production-be127e6c.up.railway.app"
+          cases=[
+              ("/api/health",{}),
+              ("/api/reverse-address",{"lat":37.498417,"lng":127.028292}),
+              ("/api/search-addresses",{"q":"강남역"}),
+              ("/api/geocode-address",{"q":"서울특별시 강남구 테헤란로 124"}),
+          ]
+          for path,params in cases:
+              url=site+path+("?" + urlencode(params) if params else "")
+              try:
+                  with urlopen(url,timeout=30) as res:
+                      status=res.status
+                      body=res.read(3000).decode()
+              except HTTPError as err:
+                  status=err.code
+                  body=err.read(3000).decode()
+              try: 
+                  value=json.loads(body)
+              except json.JSONDecodeError:
+                  value={"detail":"Non-JSON error"}
+              # Log only safe error categories and health flags, never secrets.
+              if path=="/api/health":
+                  print(path, status, "graph_loaded",value.get("graph_loaded"),
+                        "risk_source",value.get("risk_source"))
+              else:
+                  print(path,status,"detail",str(value.get("detail",""))[:220],
+                        "has_address",bool(value.get("address")),
+                        "suggestions",len(value.get("suggestions",[])) if isinstance(value.get("suggestions",[]),list) else "?")
+          PY
