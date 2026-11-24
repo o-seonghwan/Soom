@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { Route, RouteRequest } from "../types/route";
 import CleanlinessLegend from "./CleanlinessLegend";
+import RoutePanel from "./RoutePanel";
 
 type MobileTab = "shortest" | "safest" | "report";
 
@@ -61,18 +62,12 @@ export default function MobileB2CSheet({
       </button>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-3">
-        {expanded && pageMode !== "report" && (
-          <div className="mb-3 rounded-xl bg-slate-50 px-3 py-2.5">
-            <div className="mb-1.5 flex justify-between text-[12px] font-bold text-slate-800">
-              <label htmlFor="mobile-avoidance-level">회피 강도</label>
-              <output htmlFor="mobile-avoidance-level" className="text-emerald-700">{avoidanceLevel}%</output>
-            </div>
-            <input id="mobile-avoidance-level" type="range" min={0} max={100} step={20}
-              value={avoidanceLevel} onChange={event => onAvoidanceLevelChange(Number(event.currentTarget.value))}
-              className="w-full accent-emerald-500" />
-            <div className="mt-1 flex justify-between text-[10px] text-slate-400">
-              <span>거리 우선</span><span>위험 회피 우선</span>
-            </div>
+        {expanded && pageMode === "safest" && (
+          <div className="mb-3">
+            <RoutePanel
+              avoidanceLevel={avoidanceLevel}
+              onAvoidanceLevelChange={onAvoidanceLevelChange}
+            />
           </div>
         )}
 
