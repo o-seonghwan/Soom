@@ -323,13 +323,6 @@ export default function B2GDashboard() {
             {showDashboard && (
               <aside aria-label="지자체 분석" className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5">
-                <div className="mb-2 flex justify-end">
-                  <button type="button" onClick={() => setShowDashboard(false)}
-                    aria-label="분석 패널 접기"
-                    className="rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-600 hover:bg-slate-50">
-                    패널 접기
-                  </button>
-                </div>
                 {analysisTab === "reports" ? (
                   <div role="tabpanel" aria-label="관리자 대시보드" ref={setDashboardTarget} />
                 ) : analysisTab === "dbscan" ? (

@@ -13,6 +13,38 @@ import requests
 
 VWORLD_URL = "https://api.vworld.kr/req/address"
 
+def _key_context():
+    """VWorld domain-restricted keys can require both domain and Referer."""
+    domain = os.environ.get("VWORLD_DOMAIN", "").strip()
+    if not domain:
+        return {}, {}
+    host = domain if domain.startswith(("https://", "http://")) else "https://" + domain
+    return {"domain": host}, {"Referer": host.rstrip("/") + "/"}
+
+
+class VWorldAuthError(requests.RequestException):
+    """A domain/key error; no credential is included in the exception."""
+
+
+def _validated_response(response):
+    if response.status_code in (401, 403):
+        raise VWorldAuthError("VWorld 인증이 거부됐습니다. VWORLD_API_KEY 및 VWORLD_DOMAIN을 확인하세요.")
+    response.raise_for_status()
+    body = response.json().get("response", {})
+    status = body.get("status")
+    if status in ("OK", "NOT_FOUND"):
+        return body
+    error = body.get("error") or {}
+    code = str(error.get("code") or "").upper()
+    if code in {"INVALID_KEY", "EXPIRE_KEY", "INVALID_DOMAIN", "INVALID_ACCESS"}:
+        raise VWorldAuthError(
+            "VWorld API 인증 실패 (" + code + "). 키의 주소/검색 API 사용 권한과 VWORLD_DOMAIN 등록 도메인을 확인하세요."
+        )
+    raise requests.RequestException(
+        "VWorld API 요청 실패. 주소 API 인증키, 등록 도메인 및 서비스 상태를 확인하세요."
+    )
+
+
 
 def reverse_address(lat: float, lng: float) -> dict:
     if not all(math.isfinite(v) for v in (lat, lng)) or not (-90 <= lat <= 90 and -180 <= lng <= 180):
@@ -25,23 +57,22 @@ def reverse_address(lat: float, lng: float) -> dict:
 
 @lru_cache(maxsize=2048)
 def _cached_vworld(lat: float, lng: float, key: str) -> dict:
+    domain_params, headers = _key_context()
     response = requests.get(
         VWORLD_URL,
+        headers=headers,
         params={
+            **domain_params,
             "service": "address", "request": "getaddress", "version": "2.0",
             "crs": "EPSG:4326", "point": f"{lng},{lat}",   # VWorld는 경도,위도 순서
             "type": "both", "format": "json", "key": key,
         },
         timeout=5,
     )
-    response.raise_for_status()
-    body = response.json().get("response", {})
+    body = _validated_response(response)
     status = body.get("status")
     if status == "NOT_FOUND":
         return {"address": None, "source": "vworld-empty"}
-    if status != "OK":
-        # 키 오류·호출 한도 초과 등 → main.py가 503으로 안내. 키가 섞인 URL은 내보내지 않는다.
-        raise requests.RequestException(f"VWorld 응답 상태 {status}")
     items = body.get("result") or []
     road = next((i.get("text") for i in items if i.get("type") == "road" and i.get("text")), None)
     parcel = next((i.get("text") for i in items if i.get("type") == "parcel" and i.get("text")), None)
@@ -66,24 +97,23 @@ def search_addresses(query: str) -> list[dict]:
     if not key:
         raise RuntimeError("주소 검색을 사용하려면 서버의 VWORLD_API_KEY 설정이 필요합니다.")
 
+    domain_params, headers = _key_context()
     suggestions = []
     seen = set()
     for search_type, category in (("address", "road"), ("address", "parcel"), ("place", None)):
         params = {
+            **domain_params,
             "service": "search", "request": "search", "version": "2.0",
             "crs": "EPSG:4326", "type": search_type, "query": query,
             "format": "json", "size": 8, "page": 1, "key": key,
         }
         if category:
             params["category"] = category
-        response = requests.get(VWORLD_SEARCH_URL, params=params, timeout=6)
-        response.raise_for_status()
-        body = response.json().get("response", {})
+        response = requests.get(VWORLD_SEARCH_URL, params=params, headers=headers, timeout=6)
+        body = _validated_response(response)
         status = body.get("status")
         if status == "NOT_FOUND":
             continue
-        if status != "OK":
-            raise requests.RequestException(f"VWorld 주소 검색 응답 상태 {status}")
         for item in (body.get("result") or {}).get("items") or []:
             point = item.get("point") or {}
             try:
@@ -121,20 +151,19 @@ def forward_address(address: str) -> dict:
     key = os.environ.get("VWORLD_API_KEY", "").strip()
     if not key:
         raise RuntimeError("주소 검색을 사용하려면 서버의 VWORLD_API_KEY 설정이 필요합니다.")
+    domain_params, headers = _key_context()
     for kind in ("ROAD", "PARCEL"):
         response = requests.get(
             VWORLD_URL,
-            params={"service": "address", "request": "getcoord", "version": "2.0",
+            headers=headers,
+            params={**domain_params, "service": "address", "request": "getcoord", "version": "2.0",
                     "crs": "EPSG:4326", "address": address, "type": kind,
                     "format": "json", "key": key},
             timeout=6,
         )
-        response.raise_for_status()
-        body = response.json().get("response", {})
+        body = _validated_response(response)
         if body.get("status") == "NOT_FOUND":
             continue
-        if body.get("status") != "OK":
-            raise requests.RequestException(f"VWorld 주소 변환 응답 상태 {body.get('status')}")
         point = (body.get("result") or {}).get("point") or {}
         try:
             lat, lng = float(point["y"]), float(point["x"])

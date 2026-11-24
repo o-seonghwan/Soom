@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode, type PointerEvent } from "react";
 import type { Route, RouteRequest } from "../types/route";
 import CleanlinessLegend from "./CleanlinessLegend";
 import RoutePanel from "./RoutePanel";
@@ -7,6 +7,7 @@ type MobileTab = "shortest" | "safest" | "report";
 
 interface Props {
   pageMode: MobileTab;
+  initialOpen?: boolean;
   onTabChange: (mode: MobileTab) => void;
   routes: Route[];
   avoidanceLevel: RouteRequest["avoidanceLevel"];
@@ -20,10 +21,31 @@ interface Props {
 
 /** Mobile-only B2C sheet; the desktop result panel remains independent. */
 export default function MobileB2CSheet({
-  pageMode, onTabChange, routes, avoidanceLevel, onAvoidanceLevelChange,
+  pageMode, initialOpen = false, onTabChange, routes, avoidanceLevel, onAvoidanceLevelChange,
   loading, elapsedSeconds, searchError, reportContent, reportError,
 }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  // Three positions let the user keep the map visible even when using the report form.
+  const [heightMode, setHeightMode] = useState<"peek" | "middle" | "full">(initialOpen ? "middle" : "peek");
+  const dragStartY = useRef<number | null>(null);
+  const dragPointerId = useRef<number | null>(null);
+  const expanded = heightMode !== "peek";
+
+  function onHandleDown(event: PointerEvent<HTMLButtonElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    dragStartY.current = event.clientY;
+    dragPointerId.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function onHandleUp(event: PointerEvent<HTMLButtonElement>) {
+    if (dragStartY.current === null || dragPointerId.current !== event.pointerId) return;
+    const delta = event.clientY - dragStartY.current;
+    dragStartY.current = null;
+    dragPointerId.current = null;
+    if (delta < -30) setHeightMode(current => current === "peek" ? "middle" : "full");
+    else if (delta > 30) setHeightMode(current => current === "full" ? "middle" : "peek");
+    else setHeightMode(current => current === "peek" ? "middle" : "peek");
+  }
+  function resetDrag() { dragStartY.current = null; dragPointerId.current = null; }
   const shortest = routes.find(route => route.id === "shortest");
   const safest = routes.find(route => route.id === "safest");
   const active = pageMode === "shortest" ? shortest : safest;
@@ -53,16 +75,18 @@ export default function MobileB2CSheet({
 
   return (
     <section aria-label="모바일 경로 및 제보 패널"
-      className={`absolute inset-x-0 bottom-0 z-[850] flex flex-col rounded-t-[26px] border border-slate-200 bg-white shadow-[0_-10px_36px_rgba(15,23,42,.16)] transition-[height] duration-200 ${expanded || pageMode === "report" ? "h-[min(68dvh,630px)]" : "h-[218px]"}`}
+      className={`absolute inset-x-0 bottom-0 z-[850] flex flex-col rounded-t-[26px] border border-slate-200 bg-white shadow-[0_-10px_36px_rgba(15,23,42,.16)] transition-[height] duration-200 ${heightMode === "full" ? "h-[min(78dvh,720px)]" : heightMode === "middle" ? "h-[min(46dvh,430px)]" : "h-[186px]"}`}
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-      <button type="button" aria-label={expanded ? "경로 패널 축소" : "경로 패널 펼치기"}
-        aria-expanded={expanded} onClick={() => setExpanded(value => !value)}
-        className="flex w-full shrink-0 justify-center pb-1 pt-2.5">
+      <button type="button" aria-label="경로 패널 높이 조절: 위아래로 드래그"
+        aria-expanded={expanded}
+        onPointerDown={onHandleDown} onPointerUp={onHandleUp} onPointerCancel={resetDrag}
+        style={{ touchAction: "none" }}
+        className="flex w-full shrink-0 cursor-ns-resize justify-center pb-2 pt-3">
         <span className="h-1 w-8 rounded-full bg-slate-200" />
       </button>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-3">
-        {expanded && pageMode === "safest" && (
+        {pageMode === "safest" && heightMode !== "peek" && (
           <div className="mb-3">
             <RoutePanel
               avoidanceLevel={avoidanceLevel}
@@ -78,7 +102,7 @@ export default function MobileB2CSheet({
             ["report", "흡연 제보"],
           ] as const).map(([mode, label]) => (
             <button type="button" role="tab" aria-selected={pageMode === mode} key={mode}
-              onClick={() => { onTabChange(mode); if (mode === "report") setExpanded(true); }}
+              onClick={() => { onTabChange(mode); setHeightMode("middle"); }}
               className={`rounded-lg px-1 py-2 text-xs font-semibold ${pageMode === mode ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-700"}`}>
               {label}
             </button>
@@ -95,7 +119,7 @@ export default function MobileB2CSheet({
             <div className="rounded-xl border border-teal-400 bg-teal-100/80 px-3 py-2.5">
               <p className="flex items-center justify-between text-xs font-semibold text-slate-700">
                 <span>{pageMode === "shortest" ? "일반 최단 도보 경로" : "간접흡연 회피경로"}</span>
-                <button type="button" onClick={() => setExpanded(value => !value)}
+                <button type="button" onClick={() => setHeightMode(current => current === "full" ? "middle" : "full")}
                   aria-label="경로 정보 자세히 보기" className="text-lg leading-none text-teal-500">›</button>
               </p>
               {active ? (
@@ -115,7 +139,7 @@ export default function MobileB2CSheet({
             <p className="mt-1.5 text-[10px] leading-4 text-slate-500">
               {pageMode === "shortest" ? "보행 거리만 고려한 최단 경로입니다." : "선택한 회피 강도와 숨길 AI 청정지수를 반영한 경로입니다."}
             </p>
-            {expanded && (
+            {heightMode === "full" && (
               <div className="mt-4 space-y-3">
                 <div>
                   <h3 className="text-[12px] font-bold text-slate-800">숨길 AI 모델 · 청정지수</h3>

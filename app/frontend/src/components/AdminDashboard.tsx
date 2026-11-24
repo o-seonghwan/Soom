@@ -209,9 +209,7 @@ export default function AdminDashboard({
       setAuthorized(true);
       onAuthorizedChange?.(true);
       onSessionChange?.(makeAuthHeader(username, password));
-      setMessage(
-        "관리자 로그인이 완료되었습니다."
-      );
+      setMessage("");
 
       // B2G 지도에 전체 신고 전달
       onAdminReportsChange?.(data);
