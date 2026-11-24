@@ -7,6 +7,7 @@ type MobileTab = "shortest" | "safest" | "report";
 
 interface Props {
   pageMode: MobileTab;
+  initialOpen?: boolean;
   onTabChange: (mode: MobileTab) => void;
   routes: Route[];
   avoidanceLevel: RouteRequest["avoidanceLevel"];
@@ -20,11 +21,11 @@ interface Props {
 
 /** Mobile-only B2C sheet; the desktop result panel remains independent. */
 export default function MobileB2CSheet({
-  pageMode, onTabChange, routes, avoidanceLevel, onAvoidanceLevelChange,
+  pageMode, initialOpen = false, onTabChange, routes, avoidanceLevel, onAvoidanceLevelChange,
   loading, elapsedSeconds, searchError, reportContent, reportError,
 }: Props) {
   // Three positions let the user keep the map visible even when using the report form.
-  const [heightMode, setHeightMode] = useState<"peek" | "middle" | "full">("middle");
+  const [heightMode, setHeightMode] = useState<"peek" | "middle" | "full">(initialOpen ? "middle" : "peek");
   const dragStartY = useRef<number | null>(null);
   const dragPointerId = useRef<number | null>(null);
   const expanded = heightMode !== "peek";
