@@ -6,10 +6,21 @@ import B2GDashboard from "./B2GDashboard";
 
 type ServiceMode = "b2c" | "b2g" | null;
 
+const MOBILE_SPLASH_IMAGES = [
+  "/soom-mobile-splash.webp",
+  "/soom-mobile-splash-01.webp",
+  "/soom-mobile-splash-11.webp",
+  "/soom-mobile-splash-21.webp",
+] as const;
+
 export default function App() {
   const [serviceMode, setServiceMode] =
     useState<ServiceMode>(null);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 760px)").matches);
+  // Choose once on mount, so re-renders do not change the displayed splash.
+  const [mobileSplashSrc] = useState(() =>
+    MOBILE_SPLASH_IMAGES[Math.floor(Math.random() * MOBILE_SPLASH_IMAGES.length)]
+  );
   // Only the first mobile app entry shows the splash; returning to service selection does not.
   const [showMobileSplash, setShowMobileSplash] = useState(
     () => window.matchMedia("(max-width: 760px)").matches
@@ -38,7 +49,7 @@ export default function App() {
         style={{ backgroundColor: "#ecfaf4" }}
       >
         <img
-          src="/soom-mobile-splash.webp"
+          src={mobileSplashSrc}
           alt="숨길의 수미, 구리, 당당 캐릭터가 위치 아이콘 주변에 모인 시작 화면"
           className="h-full w-full object-contain"
           fetchPriority="high"
@@ -58,8 +69,8 @@ export default function App() {
         }}
       >
         <div className="mx-auto w-full max-w-[970px]">
-          <header className="mb-4 flex w-full items-center justify-between gap-3 min-[761px]:justify-end min-[761px]:gap-[120px]">
-            <div className="flex shrink-0 items-center gap-2" aria-label="숨길">
+          <header className="mb-4 flex w-full items-center justify-between gap-3 min-[761px]:grid min-[761px]:grid-cols-[1fr_auto_1fr] min-[761px]:gap-0">
+            <div className="flex shrink-0 items-center gap-2 min-[761px]:col-start-2 min-[761px]:justify-self-center" aria-label="숨길">
               <svg width="43" height="60" viewBox="0 0 46 64" role="img" aria-label="숨길 위치 로고" className="h-[50px] w-[36px] min-[761px]:h-[60px] min-[761px]:w-[43px]">
                 <defs>
                   <linearGradient id="soomPinGradient" x1="0" y1="0" x2="1" y2="1">
@@ -80,7 +91,7 @@ export default function App() {
             <img
               src="/soom-service-mascots.webp"
               alt="손을 잡고 인사하는 수미, 구리, 당당"
-              className="h-auto w-[min(57%,255px)] shrink object-contain min-[761px]:w-[264px]"
+              className="h-auto w-[min(57%,255px)] shrink object-contain min-[761px]:col-start-3 min-[761px]:w-[264px] min-[761px]:justify-self-end"
             />
           </header>
 
