@@ -174,7 +174,7 @@ function BoundaryFocus({
   const map = useMap();
 
   useEffect(() => {
-    if (!boundary) return;
+    if (!boundary || focusPoint) return;
 
     const layer = L.geoJSON(boundary);
     const bounds = layer.getBounds();
@@ -184,7 +184,7 @@ function BoundaryFocus({
         padding: [25, 25],
       });
     }
-  }, [map, boundary]);
+  }, [map, boundary, focusPoint]);
 
   return null;
 }
