@@ -8,10 +8,10 @@ from pathlib import Path
 # Resolve from this Python file, not the process working directory.
 # Supports local Windows paths containing spaces and Korean characters.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_SMOKING_ZONES_CSV = (
-    PROJECT_ROOT / "data" / "processed" / "결과" / "전처리기반"
-    / "특성_강남구" / "gangnam_smoking_zones.csv"
-)
+# Bundled source records are marked as unverified; never call them verified facilities.
+# The backend Docker image includes app/backend/data, so this works on Railway
+# even if the optional volume path has not been configured.
+DEFAULT_SMOKING_ZONES_CSV = Path(__file__).resolve().parent / "data" / "gangnam_smoking_zones.csv"
 
 
 def _resolve_smoking_csv():

@@ -1,5 +1,6 @@
 
 from contextlib import asynccontextmanager
+import logging
 from typing import Literal
 from uuid import UUID
 
@@ -24,9 +25,11 @@ from walking_router import (
 
 from safe_router import calculate_safest_route
 from b2g_cleanliness import edge_cleanliness_geojson
+from dbscan_sites import load_dbscan_sites
+from childcare_exposure import load_childcare_exposure
 from risk_provider import get_risk_snapshot
 from smoking_zones import load_smoking_zones
-from address_lookup import reverse_address
+from address_lookup import reverse_address, search_addresses, forward_address, KakaoAuthError
 import requests
 
 from risk_mapper import (
@@ -49,7 +52,8 @@ from report_repository import (
     update_report_review,
 )
 
-from admin_auth import require_admin
+from admin_auth import require_admin, require_owner, owner_role
+from admin_accounts import apply_for_admin, list_applications, review_application, rate_limit
 
 
 # =========================================
@@ -107,7 +111,7 @@ async def lifespan(app: FastAPI):
 # =========================================
 
 app = FastAPI(
-    title="폐(Lung) 끼치지 마세요 - 강남구 API",
+    title="숨길 - 강남구 API",
     version="0.6.0",
     lifespan=lifespan,
 )
@@ -268,6 +272,7 @@ def compare_routes(
             graph=graph,
             start=request.start,
             end=request.end,
+            edge_risks=edge_risks,
         )
 
         safest = calculate_safest_route(
@@ -294,8 +299,55 @@ def reverse_address_api(lat: float, lng: float):
         return reverse_address(lat, lng)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    except KakaoAuthError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
     except requests.RequestException as error:
+        logging.getLogger("soom.kakao").warning(
+            "Kakao request failure: category=%s http_status=%s",
+            type(error).__name__,
+            getattr(getattr(error, "response", None), "status_code", None),
+        )
         raise HTTPException(status_code=503, detail="주소 조회 서비스 연결에 실패했습니다.") from error
+
+
+@app.get("/api/search-addresses")
+def search_addresses_api(q: str):
+    try:
+        return {"suggestions": search_addresses(q)}
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except KakaoAuthError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except requests.RequestException as error:
+        logging.getLogger("soom.kakao").warning(
+            "Kakao request failure: category=%s http_status=%s",
+            type(error).__name__,
+            getattr(getattr(error, "response", None), "status_code", None),
+        )
+        raise HTTPException(status_code=503, detail="주소 검색 서비스에 연결하지 못했습니다.") from error
+
+
+@app.get("/api/geocode-address")
+def geocode_address_api(q: str):
+    try:
+        return forward_address(q)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except KakaoAuthError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except requests.RequestException as error:
+        logging.getLogger("soom.kakao").warning(
+            "Kakao request failure: category=%s http_status=%s",
+            type(error).__name__,
+            getattr(getattr(error, "response", None), "status_code", None),
+        )
+        raise HTTPException(status_code=503, detail="주소 변환 서비스에 연결하지 못했습니다.") from error
 
 
 @app.get("/api/smoking-zones")
@@ -310,6 +362,24 @@ def smoking_zones():
 @app.get("/api/risks")
 def get_risks(request: Request):
     return request.app.state.risk_snapshot["locations"]
+
+
+@app.get("/api/b2g/dbscan/sites")
+def get_b2g_dbscan_sites(admin_username: str = Depends(require_admin)):
+    """Return existing DBSCAN CSV outputs only; never synthesize site suggestions."""
+    try:
+        return load_dbscan_sites()
+    except (ValueError, FileNotFoundError) as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+
+@app.get("/api/b2g/childcare/exposure")
+def get_b2g_childcare_exposure(admin_username: str = Depends(require_admin)):
+    """Only return the previously generated childcare ranking CSV."""
+    try:
+        return load_childcare_exposure()
+    except (ValueError, FileNotFoundError) as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 @app.get("/api/b2g/cleanliness/edges")
@@ -411,7 +481,53 @@ def admin_me(
     return {
         "authenticated": True,
         "username": admin_username,
+        "role": owner_role(admin_username),
     }
+
+
+
+# =========================================
+# Approved B2G administrator account requests
+# =========================================
+class AdminApplicationCreate(BaseModel):
+    username: str = Field(min_length=4, max_length=40)
+    password: str = Field(min_length=12, max_length=128)
+    email: str = Field(min_length=3, max_length=254)
+    organization: str = Field(min_length=2, max_length=160)
+    reason: str = Field(min_length=10, max_length=800)
+
+
+class AdminApplicationReview(BaseModel):
+    decision: Literal["approved", "rejected", "disabled"]
+    reviewNote: str = Field(default="", max_length=800)
+
+
+@app.post("/api/admin/applications", status_code=201)
+def request_admin_account(body: AdminApplicationCreate, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    rate_limit("signup:" + client_ip, 5, 3600)
+    try:
+        return apply_for_admin(body.username, body.password, body.email,
+                               body.organization, body.reason)
+    except psycopg.Error as error:
+        raise HTTPException(status_code=503, detail="관리자 계정 신청 DB 연결에 실패했습니다.") from error
+
+
+@app.get("/api/admin/applications")
+def get_admin_applications(_owner: str = Depends(require_owner)):
+    try:
+        return list_applications()
+    except psycopg.Error as error:
+        raise HTTPException(status_code=503, detail="관리자 신청 내역을 조회할 수 없습니다.") from error
+
+
+@app.patch("/api/admin/applications/{account_id}")
+def approve_admin_account(account_id: UUID, body: AdminApplicationReview,
+                          owner: str = Depends(require_owner)):
+    try:
+        return review_application(str(account_id), body.decision, owner, body.reviewNote)
+    except psycopg.Error as error:
+        raise HTTPException(status_code=503, detail="관리자 승인 처리를 완료하지 못했습니다.") from error
 
 
 # =========================================

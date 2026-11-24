@@ -1,52 +1,130 @@
-"""좌표 → 도로명주소 변환(역지오코딩). VWorld(국토교통부 브이월드) 주소 API를 쓴다.
+"""Kakao Local API adapter for the existing Soom address endpoints.
 
-- 키: 환경변수 VWORLD_API_KEY. 서버에서만 쓰고 브라우저로 보내지 않는다.
-- 도로명주소를 먼저 쓰고, 도로명주소가 없는 곳(길 한가운데 등)은 지번주소로 대신한다.
-- 키가 없으면 {"address": None, "source": "unconfigured"} → 화면은 좌표를 그대로 보여 준다.
-- VWorld 이용약관상 조회 결과를 별도 저장장치·데이터베이스에 저장하면 안 된다.
-  그래서 파일·DB에는 쓰지 않고, 서버가 켜져 있는 동안만 메모리에 기억한다(같은 좌표 반복 조회 방지).
+Keep the existing frontend payload and endpoint contracts. Credentials are only
+sent from the backend; never persist returned address/coordinate data to disk.
 """
 from functools import lru_cache
+import logging
 import math
 import os
+
 import requests
 
-VWORLD_URL = "https://api.vworld.kr/req/address"
+BASE = "https://dapi.kakao.com/v2/local"
+LOG = logging.getLogger("soom.kakao")
+
+
+class KakaoAuthError(requests.RequestException):
+    """Kakao REST API authentication/permission failure (no credentials in message)."""
+
+
+def _call(path: str, params: dict) -> dict:
+    key = os.environ.get("KAKAO_REST_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("주소 검색을 사용하려면 서버에 KAKAO_REST_API_KEY 설정이 필요합니다.")
+    response = requests.get(
+        f"{BASE}/{path}",
+        headers={"Authorization": f"KakaoAK {key}"},
+        params=params,
+        timeout=7,
+    )
+    if response.status_code in (401, 403):
+        raise KakaoAuthError("카카오 로컬 API 인증 또는 접근 권한을 확인하세요.")
+    response.raise_for_status()
+    return response.json()
+
+
+def _valid_coordinates(lat, lng) -> bool:
+    return math.isfinite(lat) and math.isfinite(lng) and 37 <= lat <= 38 and 126 <= lng <= 128
+
+
+def _point(item: dict):
+    try:
+        lat, lng = float(item["y"]), float(item["x"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not _valid_coordinates(lat, lng):
+        return None
+    return lat, lng
+
+
+def search_addresses(query: str) -> list[dict]:
+    """Search both place names and road/parcel addresses."""
+    query = query.strip()
+    if len(query) < 2:
+        return []
+    if len(query) > 120:
+        raise ValueError("검색어는 최대 120자입니다.")
+
+    suggestions = []
+    seen = set()
+    for path, kind in (("search/keyword.json", "장소"), ("search/address.json", "주소")):
+        response = _call(path, {"query": query, "size": 10})
+        for item in response.get("documents", []):
+            point = _point(item)
+            if point is None:
+                continue
+            lat, lng = point
+            if kind == "장소":
+                title = str(item.get("place_name") or "").strip()
+                address = str(item.get("road_address_name") or item.get("address_name") or title).strip()
+            else:
+                title = str(item.get("address_name") or "").strip()
+                address = title
+            if not title or not address:
+                continue
+            signature = (round(lat, 6), round(lng, 6), address)
+            if signature in seen:
+                continue
+            seen.add(signature)
+            suggestions.append({
+                "id": str(len(suggestions) + 1),
+                "title": title,
+                "address": address,
+                "lat": lat,
+                "lng": lng,
+                "kind": kind,
+            })
+            if len(suggestions) >= 10:
+                return suggestions
+    return suggestions
+
+
+def forward_address(address: str) -> dict:
+    """Resolve address or common place name to WGS84 lat/lng."""
+    address = address.strip()
+    if not (2 <= len(address) <= 200):
+        raise ValueError("주소는 2~200자로 입력하세요.")
+    # Prefer address search; keyword lookup is the fallback for places such as 강남역.
+    for path in ("search/address.json", "search/keyword.json"):
+        result = _call(path, {"query": address, "size": 10})
+        for item in result.get("documents", []):
+            point = _point(item)
+            if point is None:
+                continue
+            lat, lng = point
+            label = item.get("road_address_name") or item.get("address_name") or address
+            return {"lat": lat, "lng": lng, "address": label}
+    raise LookupError("일치하는 주소나 장소를 찾지 못했습니다. 연관검색어 또는 지도를 사용하세요.")
 
 
 def reverse_address(lat: float, lng: float) -> dict:
+    """Prefer road-name address; fall back to parcel address."""
     if not all(math.isfinite(v) for v in (lat, lng)) or not (-90 <= lat <= 90 and -180 <= lng <= 180):
         raise ValueError("위도·경도 값이 올바르지 않습니다.")
-    key = os.environ.get("VWORLD_API_KEY", "").strip()
-    if not key:
+    if not os.environ.get("KAKAO_REST_API_KEY", "").strip():
         return {"address": None, "source": "unconfigured"}
-    return _cached_vworld(round(lat, 6), round(lng, 6), key)
+    return _cached_reverse(round(lat, 6), round(lng, 6))
 
 
 @lru_cache(maxsize=2048)
-def _cached_vworld(lat: float, lng: float, key: str) -> dict:
-    response = requests.get(
-        VWORLD_URL,
-        params={
-            "service": "address", "request": "getaddress", "version": "2.0",
-            "crs": "EPSG:4326", "point": f"{lng},{lat}",   # VWorld는 경도,위도 순서
-            "type": "both", "format": "json", "key": key,
-        },
-        timeout=5,
-    )
-    response.raise_for_status()
-    body = response.json().get("response", {})
-    status = body.get("status")
-    if status == "NOT_FOUND":
-        return {"address": None, "source": "vworld-empty"}
-    if status != "OK":
-        # 키 오류·호출 한도 초과 등 → main.py가 503으로 안내. 키가 섞인 URL은 내보내지 않는다.
-        raise requests.RequestException(f"VWorld 응답 상태 {status}")
-    items = body.get("result") or []
-    road = next((i.get("text") for i in items if i.get("type") == "road" and i.get("text")), None)
-    parcel = next((i.get("text") for i in items if i.get("type") == "parcel" and i.get("text")), None)
-    if road:
-        return {"address": road, "source": "vworld-road"}
-    if parcel:
-        return {"address": parcel, "source": "vworld-parcel"}
-    return {"address": None, "source": "vworld-empty"}
+def _cached_reverse(lat: float, lng: float) -> dict:
+    data = _call("geo/coord2address.json", {"x": lng, "y": lat})
+    for item in data.get("documents", []):
+        road = item.get("road_address") or {}
+        parcel = item.get("address") or {}
+        if road.get("address_name"):
+            return {"address": road["address_name"], "source": "kakao-road"}
+        if parcel.get("address_name"):
+            return {"address": parcel["address_name"], "source": "kakao-parcel"}
+    return {"address": None, "source": "kakao-empty"}

@@ -4,7 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import MapView from "./components/MapView";
 import ReportForm from "./components/ReportForm";
 import RouteResultPanel from "./components/RouteResultPanel";
+import RoutePanel from "./components/RoutePanel";
+import MobileB2CSheet from "./components/MobileB2CSheet";
 import { lookupAddress } from "./services/addressService";
+import { geocodeAddress, type AddressSuggestion } from "./services/addressSearchService";
 
 import type {
   Coordinate,
@@ -12,16 +15,13 @@ import type {
   RouteRequest,
 } from "./types/route";
 
-import type { RiskLocation } from "./types/risk";
 import type {
   Report,
   ReportRequest,
 } from "./types/report";
 
 import { getRoutes } from "./services/routeService";
-import { getRisks } from "./services/riskService";
-import { getB2GCleanEdges } from "./services/cleanlinessService";
-import type { CleanEdgeFeature } from "./types/cleanliness";
+import CleanlinessLegend from "./components/CleanlinessLegend";
 import {
   getReports,
   createReport,
@@ -90,7 +90,13 @@ export default function App() {
   // ---------------------------------------
 
   const [pageMode, setPageMode] =
-    useState<PageMode>("shortest");
+    useState<PageMode>("safest");
+  // Remount the mobile sheet at a map-friendly middle height after an address search.
+  const [mobileSheetSequence, setMobileSheetSequence] = useState(0);
+
+  // Tab choice controls which searched route receives per-link cleanliness colors.
+  // Keeping it separate from the report tab avoids resetting the route highlight.
+  const [selectedRouteId, setSelectedRouteId] = useState<"shortest" | "safest">("safest");
 
   const [showControls, setShowControls] = useState(false);
 
@@ -114,7 +120,7 @@ export default function App() {
       return;
     }
     const agreed = window.confirm(
-      "숨구리당당에서 내 위치를 지도에 표시하기 위해 위치 정보 사용에 동의하시겠습니까? 동의하면 B2C 이용 중 위치가 갱신되며, 지도는 현재 위치 버튼을 누를 때만 이동합니다."
+      "숨길에서 내 위치를 지도에 표시하기 위해 위치 정보 사용에 동의하시겠습니까? 동의하면 B2C 이용 중 위치가 갱신되며, 지도는 현재 위치 버튼을 누를 때만 이동합니다."
     );
     locationConsentRef.current = agreed;
     setLocationTrackingEnabled(agreed);
@@ -148,23 +154,29 @@ export default function App() {
 
   function focusCurrentLocation() {
     if (!navigator.geolocation) {
-      window.alert("현재 위치 기능을 지원하지 않습니다.");
+      window.alert("이 기기는 위치 기능을 지원하지 않습니다.");
       return;
     }
-    if (currentLocation) {
-      setFocusPoint([...currentLocation]);
-      return;
-    }
-    // A declined entry consent can be enabled by explicitly tapping locate.
-    if (!locationTrackingEnabled) {
-      const agreed = window.confirm(
-        "내 위치 표시를 활성화하시겠습니까? 동의하면 B2C 이용 중 위치가 계속 갱신됩니다."
-      );
-      if (!agreed) return;
-      locationConsentRef.current = true;
-      setLocationTrackingEnabled(true);
-    }
-    focusOnNextLocationRef.current = true;
+
+    // On-demand location lookup avoids relying solely on watchPosition:
+    // a watch callback may be delayed by a mobile browser or its permissions.
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const point: Coordinate = [position.coords.latitude, position.coords.longitude];
+        setCurrentLocation(point);
+        setFocusPoint([...point]);
+        focusOnNextLocationRef.current = false;
+      },
+      error => {
+        const message = error.code === 1
+          ? "위치 권한이 거부되었습니다. 브라우저의 사이트 설정에서 위치 권한을 허용해 주세요."
+          : error.code === 2
+            ? "현재 위치를 확인할 수 없습니다. 기기의 위치 서비스를 켜고 다시 시도해 주세요."
+            : "위치 확인 시간이 초과되었습니다. 다시 시도해 주세요.";
+        window.alert(message);
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
   }
 
   // ---------------------------------------
@@ -179,12 +191,12 @@ export default function App() {
 
   const [startText, setStartText] = useState("");
   const [endText, setEndText] = useState("");
+  const [addressLookupNotice, setAddressLookupNotice] = useState<string | null>(null);
   // Bind lookup results to their coordinates so an old address never flashes for a new point.
   const [startLookup, setStartLookup] = useState<{ key: string; address: string | null } | null>(null);
   const [endLookup, setEndLookup] = useState<{ key: string; address: string | null } | null>(null);
   const startAddress = start ? (startLookup?.key === start.join(",") ? startLookup.address : undefined) : null;
   const endAddress = end ? (endLookup?.key === end.join(",") ? endLookup.address : undefined) : null;
-  const [showCoordinates, setShowCoordinates] = useState(false);
 
   // Geocoding is for display only; route coordinates remain unchanged.
   useEffect(() => {
@@ -192,8 +204,8 @@ export default function App() {
     const controller = new AbortController();
     const key = start.join(",");
     void lookupAddress(start, controller.signal)
-      .then(address => { if (!controller.signal.aborted) setStartLookup({ key, address }); })
-      .catch(error => { if (!controller.signal.aborted) { console.warn("출발지 주소 조회:", error); setStartLookup({ key, address: null }); } });
+      .then(address => { if (!controller.signal.aborted) { setStartLookup({ key, address }); if (address) { setAddressLookupNotice(null); setStartText(value => value === formatCoordinate(start) ? address : value); } } })
+      .catch(error => { if (!controller.signal.aborted) { console.warn("출발지 주소 조회:", error); setAddressLookupNotice(error instanceof Error ? error.message : "주소 변환에 실패했습니다."); setStartLookup({ key, address: null }); } });
     return () => controller.abort();
   }, [start]);
 
@@ -202,13 +214,13 @@ export default function App() {
     const controller = new AbortController();
     const key = end.join(",");
     void lookupAddress(end, controller.signal)
-      .then(address => { if (!controller.signal.aborted) setEndLookup({ key, address }); })
-      .catch(error => { if (!controller.signal.aborted) { console.warn("목적지 주소 조회:", error); setEndLookup({ key, address: null }); } });
+      .then(address => { if (!controller.signal.aborted) { setEndLookup({ key, address }); if (address) { setAddressLookupNotice(null); setEndText(value => value === formatCoordinate(end) ? address : value); } } })
+      .catch(error => { if (!controller.signal.aborted) { console.warn("목적지 주소 조회:", error); setAddressLookupNotice(error instanceof Error ? error.message : "주소 변환에 실패했습니다."); setEndLookup({ key, address: null }); } });
     return () => controller.abort();
   }, [end]);
 
   const [avoidanceLevel, setAvoidanceLevel] =
-    useState<RouteRequest["avoidanceLevel"]>(50);
+    useState<RouteRequest["avoidanceLevel"]>(60);
 
   // ---------------------------------------
   // 경로 탐색 상태
@@ -216,6 +228,52 @@ export default function App() {
 
   const [routes, setRoutes] =
     useState<Route[]>([]);
+
+  // Show the interpretation notice briefly after an explicit route search.
+  // The information button remains available above Leaflet's zoom controls.
+  const [showRiskNotice, setShowRiskNotice] = useState(false);
+  const [riskNoticeFading, setRiskNoticeFading] = useState(false);
+  const riskNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const riskNoticeFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function cancelRiskNoticeTimer() {
+    if (riskNoticeTimer.current !== null) {
+      window.clearTimeout(riskNoticeTimer.current);
+      riskNoticeTimer.current = null;
+    }
+    if (riskNoticeFadeTimer.current !== null) {
+      window.clearTimeout(riskNoticeFadeTimer.current);
+      riskNoticeFadeTimer.current = null;
+    }
+  }
+
+  function closeRiskNotice() {
+    cancelRiskNoticeTimer();
+    setRiskNoticeFading(false);
+    setShowRiskNotice(false);
+  }
+
+  function showTimedRiskNotice() {
+    cancelRiskNoticeTimer();
+    setRiskNoticeFading(false);
+    setShowRiskNotice(true);
+    // Keep the existing total display time (7 seconds), but fade the last 2.5 seconds.
+    riskNoticeFadeTimer.current = window.setTimeout(() => {
+      setRiskNoticeFading(true);
+      riskNoticeFadeTimer.current = null;
+    }, 4500);
+    riskNoticeTimer.current = window.setTimeout(() => {
+      setShowRiskNotice(false);
+      setRiskNoticeFading(false);
+      riskNoticeTimer.current = null;
+    }, 7000);
+  }
+
+  function toggleRiskNotice() {
+    cancelRiskNoticeTimer();
+    setRiskNoticeFading(false);
+    setShowRiskNotice(value => !value);
+  }
 
   // Only explicit route searches should zoom/pan to route bounds.
   // Slider-driven recalculation updates the lines without changing the viewport.
@@ -239,30 +297,15 @@ export default function App() {
 
   useEffect(() => {
     return () => {
+      cancelRiskNoticeTimer();
       if (avoidanceSearchTimer.current !== null) window.clearTimeout(avoidanceSearchTimer.current);
       routeRequestSequence.current += 1;
       routeRequestController.current?.abort();
     };
   }, []);
 
-  // ---------------------------------------
-  // 위험도 데이터
-  // ---------------------------------------
-
-  const [risks, setRisks] =
-    useState<RiskLocation[]>([]);
-
-  const [cleanlinessEdges, setCleanlinessEdges] =
-    useState<CleanEdgeFeature[]>([]);
-
-  const [riskLoading, setRiskLoading] =
-    useState(true);
-
-  const [riskError, setRiskError] =
-    useState<string | null>(null);
-
-  const [showRisks, setShowRisks] =
-    useState(true);
+  // Path cleanliness comes from scored route segments, not a full-map overlay.
+  const [showRisks, setShowRisks] = useState(true);
 
   // ---------------------------------------
   // 공개 제보 데이터
@@ -318,33 +361,6 @@ export default function App() {
     let cancelled = false;
 
     async function loadInitialData() {
-      try {
-        const [riskData, edgeData] = await Promise.all([
-          getRisks(),
-          getB2GCleanEdges(),
-        ]);
-
-        if (!cancelled) {
-          setRisks(riskData);
-          setCleanlinessEdges(edgeData.features);
-          setRiskError(null);
-        }
-      } catch (error) {
-        console.error("위험도 조회 실패:", error);
-
-        if (!cancelled) {
-          setRisks([]);
-          setCleanlinessEdges([]);
-          setRiskError(
-            "AI 모델 청정지수 보행로를 불러오지 못했습니다. LUNG_RISK_CSV 설정을 확인하세요."
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setRiskLoading(false);
-        }
-      }
-
       try {
         const reportData = await getReports();
 
@@ -426,23 +442,83 @@ export default function App() {
 
   function updateLocation(
     mode: LocationMode,
-    point: Coordinate
+    point: Coordinate,
+    textLabel?: string,
+    focusMap = true
   ) {
     cancelPendingRouteSearch();
     if (mode === "start") {
       setStart(point);
       setStartLookup(null);
-      setStartText(formatCoordinate(point));
+      setStartText(textLabel ?? formatCoordinate(point));
     } else {
       setEnd(point);
       setEndLookup(null);
-      setEndText(formatCoordinate(point));
+      setEndText(textLabel ?? formatCoordinate(point));
     }
 
-    setFocusPoint([...point]);
+    if (focusMap) setFocusPoint([...point]);
     clearSearchResult();
   }
 
+
+  // Editing an address invalidates its old coordinates: searches cannot run
+  // with stale points while the input shows a different location.
+  function handleAddressTextChange(mode: LocationMode, text: string) {
+    cancelPendingRouteSearch();
+    if (mode === "start") {
+      setStartText(text);
+      setStart(null);
+      setStartLookup(null);
+    } else {
+      setEndText(text);
+      setEnd(null);
+      setEndLookup(null);
+    }
+    clearSearchResult();
+  }
+
+  function chooseAddress(mode: LocationMode, suggestion: AddressSuggestion) {
+    if (searchInProgress.current) return;
+    updateLocation(mode, [suggestion.lat, suggestion.lng], suggestion.address || suggestion.title);
+    setPageMode("safest");
+    setMobileSheetSequence(value => value + 1);
+    if (mode === "start") setSelectionMode("end");
+  }
+
+  async function applyAddressText(mode: LocationMode): Promise<void> {
+    const text = (mode === "start" ? startText : endText).trim();
+    if (!text) {
+      window.alert("주소 또는 장소명을 입력하세요.");
+      return;
+    }
+    // Preserve the existing coordinate-input behavior.
+    const coordinate = parseCoordinate(text);
+    if (coordinate) {
+      updateLocation(mode, coordinate);
+      setPageMode("safest");
+      setMobileSheetSequence(value => value + 1);
+      if (mode === "start") setSelectionMode("end");
+      return;
+    }
+    try {
+      const point = await geocodeAddress(text);
+      // An async result must not overwrite a newer user edit.
+      const current = mode === "start" ? latestStartText.current : latestEndText.current;
+      if (current.trim() !== text) return;
+      updateLocation(mode, point, text);
+      setPageMode("safest");
+      setMobileSheetSequence(value => value + 1);
+      if (mode === "start") setSelectionMode("end");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "주소를 확인할 수 없습니다.");
+    }
+  }
+
+  const latestStartText = useRef(startText);
+  const latestEndText = useRef(endText);
+  latestStartText.current = startText;
+  latestEndText.current = endText;
 
   // =======================================
   // 8. 지도 클릭
@@ -451,7 +527,6 @@ export default function App() {
   function handleMapClick(point: Coordinate) {
     if (pageMode === "report") {
       setReportLocation(point);
-      setFocusPoint([...point]);
       setReportNotice(null);
       return;
     }
@@ -460,77 +535,13 @@ export default function App() {
       return;
     }
 
-    updateLocation(selectionMode, point);
+    updateLocation(selectionMode, point, undefined, false);
 
     if (selectionMode === "start") {
       setSelectionMode("end");
     }
   }
 
-
-  // =======================================
-  // 9. 직접 입력 좌표 적용
-  // =======================================
-
-  function applyCoordinate(mode: LocationMode) {
-    if (searchInProgress.current) {
-      return;
-    }
-
-    const text =
-      mode === "start"
-        ? startText
-        : endText;
-
-    const point = parseCoordinate(text);
-
-    if (!point) {
-      window.alert(
-        "좌표를 '위도, 경도' 형식으로 입력하세요."
-      );
-      return;
-    }
-
-    updateLocation(mode, point);
-  }
-
-
-  // =======================================
-  // 10. 현재 위치를 출발지로 설정
-  // =======================================
-
-  function requestCurrentLocation(mode: "start" | "focus") {
-    if (searchInProgress.current) return;
-    if (!navigator.geolocation) {
-      window.alert("현재 위치 기능을 지원하지 않습니다.");
-      return;
-    }
-    const purpose = mode === "start"
-      ? "현재 위치를 출발지에 입력하려면 위치 정보 사용에 동의해주세요. 동의한 경우에만 브라우저에 위치 권한을 요청합니다."
-      : "현재 위치로 지도를 이동하려면 위치 정보 사용에 동의해주세요. 위치를 경로 출발지로 저장하지 않습니다.";
-    if (!window.confirm(purpose)) return;
-
-    navigator.geolocation.getCurrentPosition(
-      position => {
-        const point: Coordinate = [position.coords.latitude, position.coords.longitude];
-        if (mode === "start") {
-          updateLocation("start", point);
-          setSelectionMode("end");
-        } else {
-          setFocusPoint([...point]);
-        }
-      },
-      error => {
-        console.error("위치 조회 오류:", error);
-        window.alert("위치를 확인하지 못했습니다. 브라우저의 위치 접근 권한과 HTTPS 또는 localhost 실행 여부를 확인하세요.");
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    );
-  }
-
-  function useCurrentLocation() {
-    requestCurrentLocation("start");
-  }
 
   function swapLocations() {
     if (searchInProgress.current) return;
@@ -553,6 +564,10 @@ export default function App() {
 
   async function handleSearch(level: RouteRequest["avoidanceLevel"] = avoidanceLevel, auto = false) {
     if (!start || !end) return;
+    if (!auto) {
+      setPageMode("safest");
+      setMobileSheetSequence(value => value + 1);
+    }
 
     // A new slider setting supersedes any pending or in-flight route request.
     if (avoidanceSearchTimer.current !== null) {
@@ -566,6 +581,9 @@ export default function App() {
     searchInProgress.current = true;
     searchStartTime.current = performance.now();
 
+    if (!auto) {
+      closeRiskNotice();
+    }
     setElapsedSeconds(0);
     setSearchStatus("idle");
     setLoading(true);
@@ -576,12 +594,14 @@ export default function App() {
       if (controller.signal.aborted || sequence !== routeRequestSequence.current) return;
 
       setRoutes(result.routes);
+      setSelectedRouteId("safest");
       setSearchStatus("success");
       if (!auto) {
         setFitBoundsRoutes(result.routes);
-        // Manual searches keep the existing result-first experience.
-        setShowControls(false);
-        setPageMode("shortest");
+        // Show route tabs immediately, with avoidance selected initially.
+        setShowControls(true);
+        setPageMode("safest");
+        showTimedRiskNotice();
       }
     } catch (error) {
       if (controller.signal.aborted || sequence !== routeRequestSequence.current) return;
@@ -617,36 +637,12 @@ export default function App() {
   }
 
   // =======================================
-  // 12. 경로 초기화
-  // =======================================
-
-  function resetRoute() {
-    if (searchInProgress.current) {
-      return;
-    }
-    cancelPendingRouteSearch();
-
-    setStart(null);
-    setEnd(null);
-    setStartLookup(null);
-    setEndLookup(null);
-
-    setStartText("");
-    setEndText("");
-
-    setFocusPoint(null);
-    setSelectionMode("start");
-
-    clearSearchResult();
-  }
-
-
-  // =======================================
   // 13. 페이지 전환
   // =======================================
 
   function changePage(mode: PageMode) {
     setPageMode(mode);
+    if (mode === "shortest" || mode === "safest") setSelectedRouteId(mode);
     setReportLocation(null);
     setReportNotice(null);
 
@@ -709,12 +705,12 @@ export default function App() {
   // =======================================
 
   return (
-    <div className="flex h-dvh flex-col bg-white">
+    <div className="flex h-dvh flex-col bg-white soom-b2c-screen">
 
       {/* 기존 헤더 유지 */}
-      <header className="z-[1000] bg-white px-5 py-4 shadow-sm">
+      <header className="z-[1000] bg-white px-5 py-4 shadow-sm max-[760px]:hidden">
         <h1 className="text-xl font-bold text-green-700">
-          숨구리당당
+          숨길
         </h1>
 
         <p className="text-xs text-gray-500">
@@ -723,14 +719,16 @@ export default function App() {
       </header>
 
       {/* 전체 높이 지도 + 접을 수 있는 설정 패널 */}
-      <main className="relative min-h-0 flex-1">
+      <main className="relative min-h-0 flex-1 soom-b2c-map-area">
         <MapView
+          mobileB2C
           start={start}
           end={end}
           routes={routes}
+          selectedRouteId={selectedRouteId}
           fitBoundsRoutes={fitBoundsRoutes}
-          risks={risks}
-          cleanlinessEdges={cleanlinessEdges}
+          risks={[]}
+          cleanlinessEdges={[]}
           reports={reports}
           showRisks={showRisks}
           showReports={showReports}
@@ -738,40 +736,39 @@ export default function App() {
           onAvoidanceLevelChange={handleAvoidanceLevelChange}
           onToggleCleanliness={() => setShowRisks(value => !value)}
           onToggleReports={() => setShowReports(value => !value)}
+          riskNoticeOpen={showRiskNotice}
+          riskNoticeFading={riskNoticeFading}
+          onToggleRiskNotice={toggleRiskNotice}
+          onCloseRiskNotice={closeRiskNotice}
           reportLocation={reportLocation}
           focusPoint={focusPoint}
+          addressLookupNotice={addressLookupNotice}
           selectionMode={selectionMode}
           startAddress={startAddress}
           endAddress={endAddress}
           routeLoading={loading}
           onSearch={() => void handleSearch()}
-          onSelectLocation={setSelectionMode}
+          onSelectLocation={mode => { if (pageMode === "report") setPageMode("safest"); setSelectionMode(mode); }}
+          startInputText={startText}
+          endInputText={endText}
+          onAddressTextChange={handleAddressTextChange}
+          onAddressChoose={chooseAddress}
+          onAddressApply={applyAddressText}
           onSwapLocations={swapLocations}
           onLocate={focusCurrentLocation}
           currentLocation={currentLocation}
           onMapClick={handleMapClick}
         />
 
-        {showRisks &&
-          !riskLoading &&
-          !riskError && cleanlinessEdges.length > 0 && (
-            <div className="absolute bottom-3 left-3 z-[500] rounded-xl bg-white/95 p-3 text-xs shadow-lg">
-              <p className="font-bold text-slate-800">보행로 청정지수 · AI 모델</p>
-              <p className="mt-1 text-gray-600">초록색이 진할수록 청정지수가 높음</p>
-              <div className="mt-2 h-2 w-full rounded" style={{background: "linear-gradient(90deg, rgba(22,163,74,0.18), rgba(22,163,74,0.85))"}} />
-              <div className="mt-1 flex justify-between text-gray-500"><span>청정지수 낮음</span><span>청정지수 높음</span></div>
-              <p className="mt-2 text-[10px] text-gray-500">15레벨 이상 확대 시 표시 · 모델 예측 기반 · 실측 대기질 아님</p>
-            </div>
-          )}
         <button type="button" onClick={() => setShowControls(value => !value)}
           aria-expanded={showControls}
-          className="absolute left-3 top-[124px] max-[760px]:top-[224px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
+          className="absolute left-3 top-[140px] max-[760px]:hidden z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
           {showControls ? "패널 닫기 ×" : "경로 결과 · 제보 ☰"}
         </button>
 
       {/* 경로 설정과 제보 폼은 필요할 때만 열어서 지도를 가리지 않도록 함 */}
       {showControls && (
-      <section className="absolute left-3 top-[172px] max-[760px]:top-[272px] z-[700] max-h-[min(56dvh,calc(100%-190px))] w-[min(390px,calc(100%-24px))] max-[760px]:w-[min(390px,calc(100%-5.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
+      <section className="absolute left-3 top-[188px] max-[760px]:hidden z-[700] max-h-[min(56dvh,calc(100%-206px))] w-[min(390px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
 
         {/* 최단/회피 경로 결과와 흡연 제보 탭 */}
         <div className="mb-4 grid grid-cols-3 gap-1">
@@ -792,40 +789,14 @@ export default function App() {
         )}
 
         {pageMode === "safest" && (
-          <RouteResultPanel type="safest" route={routes.find(route => route.id !== "shortest")} />
+          <div className="space-y-3">
+            <RoutePanel avoidanceLevel={avoidanceLevel} onAvoidanceLevelChange={handleAvoidanceLevelChange} />
+            <RouteResultPanel type="safest" route={routes.find(route => route.id !== "shortest")} />
+          </div>
         )}
 
         {loading && <p role="status" className="mt-3 text-xs text-slate-600">경로 계산 중... {elapsedSeconds.toFixed(1)}초</p>}
         {!loading && searchStatus === "error" && <p role="alert" className="mt-3 text-xs text-red-600">경로 탐색에 실패했습니다.</p>}
-
-        {/* 기존 수동 좌표 입력은 별도 접이식 도구로 보존 */}
-        {pageMode !== "report" && (
-          <div className="mt-3 border-t pt-3">
-            <button type="button" onClick={() => setShowCoordinates(value => !value)}
-              className="text-xs font-semibold text-slate-600">
-              {showCoordinates ? "좌표 직접 입력 닫기 ▲" : "좌표 직접 입력 ▼"}
-            </button>
-            {showCoordinates && (
-              <div className="mt-2 space-y-2">
-                {(["start", "end"] as const).map(mode => (
-                  <div key={mode} className="flex items-center gap-2">
-                    <input aria-label={mode === "start" ? "출발지 좌표" : "목적지 좌표"}
-                      placeholder={mode === "start" ? "출발지 위도, 경도" : "목적지 위도, 경도"}
-                      value={mode === "start" ? startText : endText}
-                      onChange={event => mode === "start" ? setStartText(event.target.value) : setEndText(event.target.value)}
-                      className="min-w-0 flex-1 rounded-lg border p-2 text-xs" />
-                    <button type="button" onClick={() => applyCoordinate(mode)}
-                      className="rounded-lg bg-slate-100 px-3 py-2 text-xs">적용</button>
-                  </div>
-                ))}
-                <button type="button" onClick={useCurrentLocation} className="rounded-lg border px-3 py-2 text-xs">
-                  동의 후 현재 위치를 출발지로 지정
-                </button>
-                <button type="button" onClick={resetRoute} className="ml-2 rounded-lg border px-3 py-2 text-xs">경로 초기화</button>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* 흡연 제보 탭 */}
         {pageMode === "report" && (
@@ -851,21 +822,6 @@ export default function App() {
           </div>
         )}
 
-        {riskLoading && (
-          <p className="mt-2 text-xs text-gray-500">
-            위험도 데이터를 불러오는 중...
-          </p>
-        )}
-
-        {riskError && (
-          <p
-            role="alert"
-            className="mt-2 text-xs text-red-600"
-          >
-            {riskError}
-          </p>
-        )}
-
         {reportError && (
           <p
             role="alert"
@@ -875,14 +831,41 @@ export default function App() {
           </p>
         )}
 
-        <p className="mt-3 text-xs text-gray-500">
-          ※ 청정지수는 모델 위험점수 기반 파생 지표이며 실측 대기질이 아닙니다.
-          공개 지도에는 승인된 제보만 표시되며,
-          사용자 제보는 위험 회피 A*에 자동으로
-          반영되지 않습니다.
-        </p>
+        {(pageMode === "shortest" || pageMode === "safest") && routes.length > 0 && (
+          <div className="mt-4 border-t border-slate-200 pt-3">
+            <CleanlinessLegend scope="route" embedded />
+          </div>
+        )}
+
       </section>
       )}
+      <div className="hidden max-[760px]:block">
+        <MobileB2CSheet
+          key={mobileSheetSequence}
+          initialOpen={mobileSheetSequence > 0}
+          pageMode={pageMode}
+          onTabChange={changePage}
+          routes={routes}
+          avoidanceLevel={avoidanceLevel}
+          onAvoidanceLevelChange={handleAvoidanceLevelChange}
+          loading={loading}
+          elapsedSeconds={elapsedSeconds}
+          searchError={!loading && searchStatus === "error"}
+          reportError={reportError}
+          reportContent={
+            <div className="space-y-3">
+              <ReportForm
+                location={reportLocation}
+                submitting={reportSubmitting}
+                onSubmit={handleCreateReport}
+                onSelectLocation={() => setReportNotice(null)}
+                onCancel={() => changePage("shortest")}
+              />
+              {reportNotice && <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-700">{reportNotice}</p>}
+            </div>
+          }
+        />
+      </div>
       </main>
     </div>
   );

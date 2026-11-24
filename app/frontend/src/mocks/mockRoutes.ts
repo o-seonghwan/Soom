@@ -34,13 +34,7 @@ export function getMockRoutes(
   const { start, end, avoidanceLevel } = request;
 
   // 회피 강도에 따른 우회 정도
-  const offsets = {
-    low: 0.15,
-    medium: 0.35,
-    high: 0.6,
-  };
-
-  const factor = offsets[avoidanceLevel];
+  const factor = 0.15 + 0.45 * Math.max(0, Math.min(100, avoidanceLevel)) / 100;
 
   // 두 좌표의 차이
   const dLat = end[0] - start[0];

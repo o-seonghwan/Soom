@@ -1,17 +1,32 @@
 """Model risk-score interpretation and provisional spatial falloff.
 
 The trained model emits a *relative risk rank* in 0..100, not measured
-secondhand smoke concentration or probability. Distance bands are design
-assumptions subject to later validation; zero contribution beyond 21m
-does NOT mean the location is scientifically proven smoke-free.
+secondhand smoke concentration or probability.
+
+Distance bands stay at 0–10, 10–15, and 15–21 m for service compatibility.
+Band weights are derived from mean outdoor tobacco smoke (OTS) PM2.5
+increments reported by Kim & Lee (2024), Nicotine & Tobacco Research,
+doi:10.1093/ntr/ntad241: 6 m 12.90, 12 m 4.86, 15 m 2.78,
+18 m 2.09, 21 m 1.57 micrograms/m^3.
+
+The 6 m mean is the reference (100%). For the middle and outer bands,
+we average the observed means at 12/15 m and 18/21 m respectively,
+then divide by the 6 m mean. These band assignments and the constant
+0–10 m weight are service assumptions, NOT weights validated in the
+paper. Distances below 6 m and beyond 21 m were not measured. Zero
+contribution beyond 21 m is a model coverage cutoff, NOT evidence
+that outdoor tobacco smoke is absent there.
 """
 import math
 
 MODEL_RADIUS_M = 21.0
+
+# Keep the original 3 bands; only the risk multipliers change.
+_REFERENCE_OTS_PM25 = 12.90
 DISTANCE_BANDS = (
     (10.0, 1.00),
-    (15.0, 0.65),
-    (21.0, 0.30),
+    (15.0, ((4.86 + 2.78) / 2) / _REFERENCE_OTS_PM25),
+    (21.0, ((2.09 + 1.57) / 2) / _REFERENCE_OTS_PM25),
 )
 
 

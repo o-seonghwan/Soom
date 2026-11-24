@@ -1,4 +1,4 @@
-"""Verify that B2G overlays serialize actual scored walking edges only."""
+"""Verify B2G overlays distinguish model-scored and unscored walking edges."""
 import sys
 import unittest
 from pathlib import Path
@@ -22,16 +22,21 @@ class B2GGeoJsonTests(unittest.TestCase):
         graph.add_edge("b", "c", key=0, length=30)
         return graph
 
-    def test_scored_edge_and_unscored_omission(self):
+    def test_scored_edge_and_unscored_gray_feature(self):
         result = edge_cleanliness_geojson(self.graph(), {
             ("a","b",0): {"score":52.0,"cleanIndex":48.0}
         })
         self.assertEqual(result["type"], "FeatureCollection")
-        self.assertEqual(len(result["features"]), 1)
-        feature = result["features"][0]
-        self.assertEqual(feature["properties"]["cleanIndex"], 48.0)
-        self.assertEqual(feature["geometry"]["type"], "LineString")
-        self.assertAlmostEqual(feature["geometry"]["coordinates"][0][0], 127.02, places=4)
+        self.assertEqual(len(result["features"]), 2)
+        by_id = {item["properties"]["edgeId"]: item for item in result["features"]}
+        scored = by_id["a:b:0"]
+        unscored = by_id["b:c:0"]
+        self.assertEqual(scored["properties"]["cleanIndex"], 48.0)
+        self.assertEqual(scored["properties"]["score"], 52.0)
+        self.assertIsNone(unscored["properties"]["cleanIndex"])
+        self.assertIsNone(unscored["properties"]["score"])
+        self.assertEqual(unscored["geometry"]["type"], "LineString")
+        self.assertAlmostEqual(scored["geometry"]["coordinates"][0][0], 127.02, places=4)
 
     def test_unmatched_edge_rejected(self):
         with self.assertRaises(ValueError):

@@ -24,9 +24,17 @@ export function deduplicateCleanEdges(
 
     if (!current) {
       unique.set(key, feature);
-    } else if (feature.properties.cleanIndex < current.properties.cleanIndex) {
-      // A physical street uses the more conservative (lower) clean index.
-      unique.set(key, feature);
+    } else {
+      const nextScore = feature.properties.cleanIndex;
+      const currentScore = current.properties.cleanIndex;
+      // A valid model score always wins over a missing score.
+      // For two scored directed links, retain the more conservative score.
+      if (
+        (nextScore != null && currentScore == null) ||
+        (nextScore != null && currentScore != null && nextScore < currentScore)
+      ) {
+        unique.set(key, feature);
+      }
     }
   }
 

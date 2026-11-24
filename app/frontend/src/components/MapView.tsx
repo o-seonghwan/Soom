@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import L from "leaflet";
 
 import {
@@ -8,7 +8,6 @@ import {
   ZoomControl,
   CircleMarker,
   Marker,
-  Circle,
   Polyline,
   Popup,
   GeoJSON,
@@ -23,9 +22,10 @@ import type { Report } from "../types/report";
 
 import { getCleanColor } from "../utils/cleanColor";
 import type { CleanEdgeFeature } from "../types/cleanliness";
-import B2CCleanRoads from "./B2CCleanRoads";
+import type { DbscanSitesResponse } from "../types/dbscan";
+import type { AddressSuggestion } from "../services/addressSearchService";
+import type { ChildcareExposure } from "../types/childcare";
 import MapRouteCard from "./MapRouteCard";
-import RoutePanel from "./RoutePanel";
 import type { RouteRequest } from "../types/route";
 import { deduplicateCleanEdges } from "../utils/deduplicateCleanEdges";
 import "leaflet/dist/leaflet.css";
@@ -47,12 +47,18 @@ const GANGNAM_CENTER: Coordinate = [
 
 interface MapViewProps {
   audience?: "b2c" | "b2g";
+  mobileB2C?: boolean;
   start: Coordinate | null;
   end: Coordinate | null;
   routes: Route[];
+  selectedRouteId?: "shortest" | "safest";
   fitBoundsRoutes?: Route[];
   risks: RiskLocation[];
   cleanlinessEdges?: CleanEdgeFeature[];
+  dbscanSites?: DbscanSitesResponse | null;
+  showDbscanSites?: boolean;
+  selectedDbscanCluster?: string;
+  selectedChildcare?: ChildcareExposure | null;
   reports: Report[];
   showRisks: boolean;
   showReports: boolean;
@@ -60,14 +66,24 @@ interface MapViewProps {
   onAvoidanceLevelChange?: (value: RouteRequest["avoidanceLevel"]) => void;
   onToggleCleanliness?: () => void;
   onToggleReports?: () => void;
+  riskNoticeOpen?: boolean;
+  riskNoticeFading?: boolean;
+  onToggleRiskNotice?: () => void;
+  onCloseRiskNotice?: () => void;
   reportLocation: Coordinate | null;
   focusPoint: Coordinate | null;
+  addressLookupNotice?: string | null;
   selectionMode?: "start" | "end";
   startAddress?: string | null;
   endAddress?: string | null;
   routeLoading?: boolean;
   onSearch?: () => void;
   onSelectLocation?: (mode: "start" | "end") => void;
+  startInputText?: string;
+  endInputText?: string;
+  onAddressTextChange?: (mode: "start" | "end", text: string) => void;
+  onAddressChoose?: (mode: "start" | "end", suggestion: AddressSuggestion) => void;
+  onAddressApply?: (mode: "start" | "end") => Promise<void>;
   onSwapLocations?: () => void;
   onLocate?: () => void;
   currentLocation?: Coordinate | null;
@@ -77,11 +93,17 @@ interface MapViewProps {
 // 지도 클릭 이벤트
 function MapClickHandler({
   onMapClick,
+  panOnClick,
 }: {
   onMapClick: (point: Coordinate) => void;
+  panOnClick: boolean;
 }) {
-  useMapEvents({
+  const map = useMapEvents({
     click(event) {
+      if (panOnClick) {
+        // Keep the current zoom and smoothly center the chosen location.
+        map.panTo(event.latlng, { animate: true, duration: 0.65, easeLinearity: 0.25 });
+      }
       onMapClick([
         event.latlng.lat,
         event.latlng.lng,
@@ -92,28 +114,44 @@ function MapClickHandler({
   return null;
 }
 
+// B2G sidebar changes the map's available width; Leaflet must recalculate its size.
+function ResizeB2GMap() {
+  const map = useMap();
+  useEffect(() => {
+    const container = map.getContainer();
+    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false }));
+    observer.observe(container);
+    map.invalidateSize({ pan: false });
+    return () => observer.disconnect();
+  }, [map]);
+  return null;
+}
+
 // 특정 위치로 지도 이동
 function MapFocus({
   point,
+  mobile,
 }: {
   point: Coordinate | null;
+  mobile: boolean;
 }) {
   const map = useMap();
 
   useEffect(() => {
     if (!point) return;
 
-    map.flyTo(
-      point,
-      Math.max(map.getZoom(), 15),
-    );
-  }, [map, point]);
+    // Mobile flyTo animation can be cancelled by a simultaneous pinch/drag
+    // or initial boundary fit; setView is deterministic for the locate button.
+    const zoom = Math.max(map.getZoom(), 15);
+    if (mobile) map.setView(point, zoom, { animate: false });
+    else map.flyTo(point, zoom);
+  }, [map, point, mobile]);
 
   return null;
 }
 
 // Once routing finishes, fit the complete route bounds rather than the last selected point.
-function FitRoutes({ routes }: { routes: Route[] }) {
+function FitRoutes({ routes, mobile }: { routes: Route[]; mobile: boolean }) {
   const map = useMap();
   useEffect(() => {
     if (routes.length === 0) return;
@@ -121,27 +159,40 @@ function FitRoutes({ routes }: { routes: Route[] }) {
     if (points.length === 0) return;
     const bounds = L.latLngBounds(points.map(([lat, lng]) => [lat, lng] as [number, number]));
     if (bounds.isValid()) {
+      // Mobile results sit behind a bottom sheet. Use its actual height so
+      // fitting a route keeps both endpoints visible in the uncovered map.
+      const sheet = mobile && window.matchMedia("(max-width: 760px)").matches
+        ? document.querySelector<HTMLElement>('[aria-label="모바일 경로 및 제보 패널"]')
+        : null;
+      const sheetHeight = sheet?.getBoundingClientRect().height ?? 0;
+      const availableHeight = map.getSize().y;
+      const bottomPadding = sheet
+        ? Math.min(sheetHeight + 24, Math.max(65, availableHeight - 180))
+        : 65;
+
       map.fitBounds(bounds.pad(0.06), {
         animate: true,
         paddingTopLeft: [35, 155],
-        paddingBottomRight: [45, 65],
+        paddingBottomRight: [45, bottomPadding],
         maxZoom: 17,
       });
     }
-  }, [map, routes]);
+  }, [map, routes, mobile]);
   return null;
 }
 
 // 최초 경계 데이터 로딩 시 강남구 전체 표시
 function BoundaryFocus({
   boundary,
+  focusPoint,
 }: {
   boundary: GeoJsonObject | null;
+  focusPoint: Coordinate | null;
 }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!boundary) return;
+    if (!boundary || focusPoint) return;
 
     const layer = L.geoJSON(boundary);
     const bounds = layer.getBounds();
@@ -151,7 +202,7 @@ function BoundaryFocus({
         padding: [25, 25],
       });
     }
-  }, [map, boundary]);
+  }, [map, boundary, focusPoint]);
 
   return null;
 }
@@ -214,27 +265,38 @@ const reportLabels: Record<Report["type"], string> = {
 
 export default function MapView({
   audience = "b2c",
+  mobileB2C = false,
   start,
   end,
   routes,
+  selectedRouteId = "safest",
   fitBoundsRoutes = routes,
-  risks,
   cleanlinessEdges,
+  dbscanSites = null,
+  showDbscanSites = false,
+  selectedDbscanCluster = "",
+  selectedChildcare = null,
   reports,
   showRisks,
   showReports,
-  avoidanceLevel,
-  onAvoidanceLevelChange,
   onToggleCleanliness,
   onToggleReports,
+  riskNoticeOpen = false,
+  riskNoticeFading = false,
+  onToggleRiskNotice,
+  onCloseRiskNotice,
   reportLocation,
   focusPoint,
+  addressLookupNotice,
   selectionMode = "start",
-  startAddress,
-  endAddress,
   routeLoading = false,
   onSearch,
   onSelectLocation,
+  startInputText = "",
+  endInputText = "",
+  onAddressTextChange,
+  onAddressChoose,
+  onAddressApply,
   onSwapLocations,
   onLocate,
   currentLocation = null,
@@ -321,7 +383,7 @@ export default function MapView({
   }, []);
 
   return (
-    <div className="relative h-full w-full">
+    <div className={`relative h-full w-full ${mobileB2C ? "soom-mobile-map" : ""}`}>
       <MapContainer
         className="lung-map"
         center={GANGNAM_CENTER}
@@ -339,14 +401,15 @@ export default function MapView({
         />
 
         <ZoomControl position="bottomright" />
+        {audience === "b2g" && <ResizeB2GMap />}
 
         {/* 지도 입력 및 이동 */}
-        <MapClickHandler onMapClick={onMapClick} />
-        <MapFocus point={focusPoint} />
-        <FitRoutes routes={fitBoundsRoutes} />
+        <MapClickHandler onMapClick={onMapClick} panOnClick={audience === "b2c"} />
+        <MapFocus point={focusPoint} mobile={mobileB2C} />
+        <FitRoutes routes={fitBoundsRoutes} mobile={mobileB2C} />
 
         {/* 강남구 전체가 보이도록 초기 조정 */}
-        <BoundaryFocus boundary={boundary} />
+        <BoundaryFocus boundary={boundary} focusPoint={focusPoint} />
 
         {/* 강남구 행정경계 */}
         {/* 강남구 외부 블라인드 마스크 */}
@@ -368,71 +431,88 @@ export default function MapView({
           <GeoJSON
             key={`clean-roads-b2g-${cleanlinessEdges.length}`}
             data={{ type: "FeatureCollection", features: deduplicateCleanEdges(cleanlinessEdges) } as FeatureCollection}
-            style={(feature) => ({
-              color: getCleanColor(Number(feature?.properties?.cleanIndex ?? 100)),
-              weight: 3,
-              opacity: 0.36,
-              lineCap: "round",
-              lineJoin: "round",
-            })}
+            style={(feature) => {
+              const rawClean = feature?.properties?.cleanIndex;
+              const hasScore = rawClean != null && Number.isFinite(Number(rawClean));
+              return {
+                color: hasScore ? getCleanColor(Number(rawClean)) : "#64748b",
+                weight: 3,
+                opacity: 0.36,
+                lineCap: "round",
+                lineJoin: "round",
+              };
+            }}
             onEachFeature={(feature, layer) => {
-              const clean = Number(feature.properties?.cleanIndex ?? 100);
-              const risk = Number(feature.properties?.score ?? 0);
-              layer.bindPopup(`보행 링크 청정지수: ${clean.toFixed(1)}/100<br/>유효 위험점수: ${risk.toFixed(1)}/100`);
+              const rawClean = feature.properties?.cleanIndex;
+              const rawRisk = feature.properties?.score;
+              if (rawClean == null || !Number.isFinite(Number(rawClean))) {
+                layer.bindPopup("보행 링크 청정지수: 데이터 없음 · 회색은 미측정 구간");
+              } else {
+                const clean = Number(rawClean);
+                const risk = rawRisk == null ? null : Number(rawRisk);
+                layer.bindPopup(`보행 링크 청정지수: ${clean.toFixed(1)}/100<br/>유효 위험점수: ${risk != null && Number.isFinite(risk) ? risk.toFixed(1) + "/100" : "데이터 없음"}`);
+              }
             }}
           />
         )}
 
-        {/* B2C: 초록색 단일 Canvas, 픽셀별 최대 불투명도만 적용 */}
-        {audience === "b2c" && showRisks && cleanlinessEdges && cleanlinessEdges.length > 0 && (
-          <B2CCleanRoads edges={cleanlinessEdges} />
-        )}
-
-        {/* 구형 데이터 사용 화면에만 기존 위험 원형 유지. 모델 보행로와 중복 표시하지 않음. */}
-        {audience === "b2c" && !cleanlinessEdges && showRisks &&
-          risks.map((risk) => (
-            <Circle
-              key={risk.id}
-              center={[risk.lat, risk.lng]}
-              radius={risk.radiusM}
-              bubblingMouseEvents={false}
-              pathOptions={{
-                color: "#64748b",
-                fillColor: "#93c5d6",
-                fillOpacity: 0.35,
-                weight: 1,
-              }}
-            >
-              <Popup>
-                <strong>간접흡연 위험도</strong>
-                <div>
-                  위험점수: {risk.score}/100
-                </div>
-              </Popup>
-            </Circle>
-          ))}
-
-        {/* A* 경로 */}
-        {routes.map((route) => (
-          <Polyline
-            key={route.id}
-            positions={route.coordinates}
+        {/* Draw only the two searched routes: inactive first, selected on top.
+            B2G keeps the original non-B2C map layers untouched. */}
+        {audience === "b2c" ? (
+          <>
+            {routes.filter(route => route.id !== selectedRouteId).map(route => (
+              <Polyline key={`inactive-${route.id}`} positions={route.coordinates}
+                bubblingMouseEvents={false}
+                pathOptions={{
+                  color: "#94a3b8",
+                  weight: 5,
+                  opacity: 0.75,
+                  lineCap: "round",
+                  lineJoin: "round",
+                }}>
+                <Popup><strong>{route.name}</strong><div>선택되지 않은 경로 · {route.distanceM}m</div></Popup>
+              </Polyline>
+            ))}
+            {routes.filter(route => route.id === selectedRouteId).map(route => (
+              <Fragment key={`active-${route.id}`}>
+                {/* Missing model coverage stays gray; no guessed cleanliness score. */}
+                {route.segments && route.segments.length > 0
+                  ? route.segments.filter(segment => segment.coordinates.length >= 2).map((segment, index) => (
+                    <Polyline key={index} positions={segment.coordinates}
+                      bubblingMouseEvents={false}
+                      pathOptions={{
+                        color: showRisks && segment.cleanIndex != null && Number.isFinite(segment.cleanIndex)
+                          ? getCleanColor(segment.cleanIndex)
+                          : "#64748b",
+                        weight: 7,
+                        opacity: 0.98,
+                        lineCap: "round",
+                        lineJoin: "round",
+                      }}>
+                      <Popup>
+                        <strong>{route.name}</strong>
+                        <div>{segment.cleanIndex == null ? "청정지수 데이터 없음" : `보행 링크 청정지수: ${segment.cleanIndex.toFixed(1)}/100`}</div>
+                      </Popup>
+                    </Polyline>
+                  ))
+                  : <Polyline positions={route.coordinates} bubblingMouseEvents={false}
+                      pathOptions={{ color: "#64748b", weight: 7, opacity: 0.98, lineCap: "round" }}>
+                      <Popup><strong>{route.name}</strong><div>보행 링크 청정지수 데이터 없음</div></Popup>
+                    </Polyline>}
+              </Fragment>
+            ))}
+          </>
+        ) : routes.map(route => (
+          <Polyline key={route.id} positions={route.coordinates}
             bubblingMouseEvents={false}
             pathOptions={{
-              color:
-                route.id === "shortest"
-                  ? "#343A40"
-                  : "#72EFDD",
+              color: route.id === "shortest" ? "#343A40" : "#72EFDD",
               weight: route.id === "shortest" ? 5 : 6,
               opacity: 0.98,
               lineCap: "round",
               lineJoin: "round",
-            }}
-          >
-            <Popup>
-              <strong>{route.name}</strong>
-              <div>거리: {route.distanceM}m</div>
-            </Popup>
+            }}>
+            <Popup><strong>{route.name}</strong><div>거리: {route.distanceM}m</div></Popup>
           </Polyline>
         ))}
 
@@ -473,6 +553,45 @@ export default function MapView({
             </Popup>
           </Marker>
         ))}
+
+        {/* Administrator-only DBSCAN candidate locations; no cluster-center circles. */}
+        {audience === "b2g" && showDbscanSites && dbscanSites && (
+          <>
+            {dbscanSites.candidates.filter(candidate =>
+              !selectedDbscanCluster || candidate.clusterId === selectedDbscanCluster
+            ).map(candidate => (
+              <CircleMarker key={`site-${candidate.id}`}
+                center={[candidate.lat, candidate.lng]} radius={8} bubblingMouseEvents={false}
+                pathOptions={{
+                  color: "#065f46", weight: 3,
+                  fillColor: "#2dd4bf", fillOpacity: 0.95,
+                }}>
+                <Popup>
+                  <strong>흡연시설 입지 후보</strong>
+                  <div>적발 집중지: {candidate.representativePlace}</div>
+                  <div>적발 집중지 주변 {Math.round(candidate.walkingDistanceM)}m</div>
+                  <div>현장 검토 전 분석 후보 · 실제 설치 시설 아님</div>
+                </Popup>
+              </CircleMarker>
+            ))}
+          </>
+        )}
+
+        {/* Selected childcare facility: show a distinct marker when reviewing priority ranking. */}
+        {audience === "b2g" && selectedChildcare && (
+          <CircleMarker
+            center={[selectedChildcare.lat, selectedChildcare.lng]}
+            radius={10}
+            bubblingMouseEvents={false}
+            pathOptions={{ color: "#5b21b6", weight: 3, fillColor: "#c4b5fd", fillOpacity: 0.95 }}>
+            <Popup>
+              <strong>{selectedChildcare.name}</strong>
+              <div>어린이집 보호 우선순위 {selectedChildcare.priorityRank}위</div>
+              <div>주변 노출점수 {selectedChildcare.exposureScore.toFixed(1)}</div>
+              <div>주변 AI 위험지수 기반 · 실측 흡연 노출 아님</div>
+            </Popup>
+          </CircleMarker>
+        )}
 
         {/* 사용자 제보 */}
         {showReports &&
@@ -547,20 +666,17 @@ export default function MapView({
         )}
       </MapContainer>
 
-      {audience === "b2c" && onSelectLocation && onSwapLocations && onSearch && (
-        <div className="pointer-events-none absolute left-3 top-3 z-[650] w-[min(440px,calc(100%-5.5rem))]">
+      {audience === "b2c" && onSelectLocation && onSwapLocations && onSearch && onAddressTextChange && onAddressChoose && onAddressApply && (
+        <div className="pointer-events-none absolute left-3 top-3 z-[800] w-[min(440px,calc(100%-5.5rem))] soom-mobile-address-card">
           <MapRouteCard start={start} end={end} selectionMode={selectionMode}
-            startAddress={startAddress} endAddress={endAddress} loading={routeLoading}
-            onSelect={onSelectLocation} onSwap={onSwapLocations} onSearch={onSearch} />
+            startText={startInputText} endText={endInputText} loading={routeLoading}
+            onMapSelect={onSelectLocation} onTextChange={onAddressTextChange}
+            onChoose={onAddressChoose} onApplyText={onAddressApply}
+            onSwap={onSwapLocations} onSearch={onSearch} />
         </div>
       )}
 
-      <div className={`absolute right-3 top-3 z-[650] flex items-start gap-2 ${audience === "b2c" ? "max-[760px]:top-[132px]" : ""}`}>
-        {audience === "b2c" && avoidanceLevel !== undefined && onAvoidanceLevelChange && (
-          <div className="w-[min(220px,calc(100vw-5.5rem))]">
-            <RoutePanel avoidanceLevel={avoidanceLevel} onAvoidanceLevelChange={onAvoidanceLevelChange} />
-          </div>
-        )}
+      <div className={`absolute right-3 top-3 z-[650] flex items-start gap-2 ${audience === "b2c" ? "max-[760px]:top-[132px]" : ""} ${mobileB2C ? "soom-mobile-tools" : ""}`}>
         <div className="flex flex-col items-end gap-2">
         <button type="button" onClick={onToggleCleanliness}
           aria-label={showRisks ? "보행로 청정지수 숨기기" : "보행로 청정지수 표시"}
@@ -591,6 +707,35 @@ export default function MapView({
             <img src="/icons/current-location.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
           </button>
         )}
+        {audience === "b2c" && onToggleRiskNotice && (
+          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
+            <button type="button" onClick={onToggleRiskNotice}
+              aria-label="위험지수 이용 안내"
+              aria-expanded={riskNoticeOpen}
+              title="위험지수 이용 안내"
+              className="flex h-11 w-11 items-center justify-center bg-transparent p-0 text-3xl font-semibold text-slate-800 drop-shadow-sm hover:text-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900">
+              <span aria-hidden="true">ⓘ</span>
+            </button>
+            {riskNoticeOpen && (
+              <section role="status" aria-label="위험지수 이용 안내"
+                className={`absolute right-[calc(100%+8px)] top-0 z-[800] w-[min(340px,calc(100vw-6rem))] rounded-xl border border-amber-300 bg-amber-50/95 p-3 text-xs leading-5 text-amber-950 shadow-xl transition-opacity duration-[2500ms] ease-in-out ${riskNoticeFading ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <strong className="text-sm">위험지수 이용 안내</strong>
+                  <button type="button" onClick={onCloseRiskNotice ?? onToggleRiskNotice}
+                    aria-label="위험지수 안내 닫기" className="rounded px-1 text-base font-bold">×</button>
+                </div>
+                <p className="mt-2">
+                  이 지도는 보행 환경의 간접흡연 노출 가능성을 예측한 것으로,
+                  특정 상점이나 건물의 흡연 발생 여부 또는 책임을 평가하지 않습니다.
+                </p>
+                <p className="mt-1">
+                  위험지수는 위치와 주변 환경에 따른 상대적 참고 정보이며,
+                  실제 현장 상황과 다를 수 있습니다.
+                </p>
+              </section>
+            )}
+          </div>
+        )}
         {showSmokingZones && smokingZonesMessage && (
           <p role="status" className="max-w-52 rounded-lg bg-white/95 p-2 text-xs text-slate-700 shadow">
             {smokingZonesMessage}
@@ -605,6 +750,12 @@ export default function MapView({
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-green-500" />승인</span>
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-slate-400" />반려</span>
         </div>
+      )}
+
+      {audience === "b2c" && addressLookupNotice && (
+        <p role="status" className="pointer-events-none absolute bottom-3 left-3 z-[800] max-w-[min(390px,calc(100%-24px))] rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 text-xs text-amber-950 shadow max-[760px]:bottom-[230px]">
+          {addressLookupNotice}
+        </p>
       )}
 
       {!import.meta.env.VITE_CARTO_API_KEY && (

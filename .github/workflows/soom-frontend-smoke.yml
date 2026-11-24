@@ -1,0 +1,88 @@
+name: Soom frontend production smoke test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: [".github/workflows/soom-frontend-smoke.yml"]
+  push:
+    branches: [main]
+    paths: [".github/workflows/soom-frontend-smoke.yml", "app/frontend/**"]
+
+jobs:
+  verify-public-site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Validate production website and same-origin FastAPI proxy
+        env:
+          FRONTEND: https://soom-production-be127e6c.up.railway.app
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import time
+          from urllib.error import HTTPError, URLError
+          from urllib.request import urlopen
+
+          root = os.environ["FRONTEND"]
+          def get(path, retries=3):
+              for attempt in range(retries):
+                  try:
+                      with urlopen(root + path, timeout=45) as response:
+                          return response.status, response.headers.get("Content-Type", ""), response.read()
+                  except (HTTPError, URLError, TimeoutError):
+                      if attempt + 1 == retries:
+                          raise
+                      time.sleep(5)
+
+          status, mime, html = get("/")
+          print("ROOT", status, mime, len(html))
+          assert status == 200 and b"<html" in html.lower() and b"/assets/" in html
+
+          asset = re.search(rb'(?:src|href)="(/assets/[^"]+\.js)"', html)
+          assert asset, "Vite JavaScript bundle was not included in index.html"
+          status, mime, js = get(asset.group(1).decode())
+          print("JS BUNDLE", status, mime, len(js))
+          assert status == 200 and len(js) > 1000 and "javascript" in mime.lower()
+          assert b"localhost:8000" not in js, "Frontend production bundle unexpectedly uses localhost API"
+
+          status, mime, icon = get("/favicon.svg")
+          print("FAVICON", status, mime, len(icon))
+          assert status == 200 and b"<svg" in icon
+
+          status, mime, data = get("/api/health")
+          info = json.loads(data)
+          print("PROXIED HEALTH", status, info)
+          assert status == 200
+          assert info.get("graph_loaded") is True
+          assert info.get("risk_source") == "model-csv"
+
+          status, mime, data = get("/api/risks/edges?limit=1")
+          edges = json.loads(data)
+          print("PROXIED AI RISKS", status, edges.get("summary"))
+          assert status == 200 and edges.get("source") == "model-csv"
+
+          # Verify a real POST is forwarded through the frontend's /api/ proxy.
+          import urllib.request
+          route_payload = json.dumps({
+              "start": [37.498417, 127.028292],
+              "end": [37.504937, 127.035184],
+              "avoidanceLevel": 100,
+          }).encode("utf-8")
+          req = urllib.request.Request(
+              root + "/api/routes",
+              data=route_payload,
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urlopen(req, timeout=90) as response:
+              routes = json.load(response).get("routes", [])
+              print("PROXIED POST ROUTES", response.status,
+                    [(r.get("id"), r.get("distanceM")) for r in routes])
+              assert response.status == 200
+              assert len(routes) == 2
+              assert {r.get("id") for r in routes} == {"shortest", "safest"}
+
+          print("SOOM_FRONTEND_PUBLIC_SMOKE_PASS")
+          PY
