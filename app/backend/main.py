@@ -28,7 +28,7 @@ from dbscan_sites import load_dbscan_sites
 from childcare_exposure import load_childcare_exposure
 from risk_provider import get_risk_snapshot
 from smoking_zones import load_smoking_zones
-from address_lookup import reverse_address, search_addresses, forward_address
+from address_lookup import reverse_address, search_addresses, forward_address, VWorldAuthError
 import requests
 
 from risk_mapper import (
@@ -298,6 +298,8 @@ def reverse_address_api(lat: float, lng: float):
         return reverse_address(lat, lng)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    except VWorldAuthError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
     except requests.RequestException as error:
         raise HTTPException(status_code=503, detail="주소 조회 서비스 연결에 실패했습니다.") from error
 
@@ -309,6 +311,8 @@ def search_addresses_api(q: str):
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except VWorldAuthError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except requests.RequestException as error:
         raise HTTPException(status_code=503, detail="주소 검색 서비스에 연결하지 못했습니다.") from error
@@ -323,6 +327,8 @@ def geocode_address_api(q: str):
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except VWorldAuthError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except requests.RequestException as error:
         raise HTTPException(status_code=503, detail="주소 변환 서비스에 연결하지 못했습니다.") from error
