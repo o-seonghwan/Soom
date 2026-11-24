@@ -147,7 +147,7 @@ export default function MapRouteCard({
                   onClick={() => { setActiveMode(null); onMapSelect(mode); }}
                   aria-label={isStart ? "출발지를 지도에서 선택" : "목적지를 지도에서 선택"}
                   title={isStart ? "지도 클릭으로 출발지 선택" : "지도 클릭으로 목적지 선택"}
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${selectionMode === mode ? "border-green-600 bg-green-50 text-green-700" : "border-slate-200 bg-white text-slate-500"}`}>
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isStart ? "bg-[#DCEBFF] text-[#2478FF]" : "bg-[#D2F8EC] text-[#0EB98B]"} ${selectionMode === mode ? (isStart ? "border-[#2478FF] ring-2 ring-[#2478FF]/25" : "border-[#0EB98B] ring-2 ring-[#0EB98B]/25") : (isStart ? "border-[#9AC9FF]" : "border-[#8CE8D2]")}`}>
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z"/>
                     <path d="M9 3v15M15 6v15"/>
