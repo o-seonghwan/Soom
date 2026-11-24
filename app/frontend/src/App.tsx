@@ -10,6 +10,17 @@ export default function App() {
   const [serviceMode, setServiceMode] =
     useState<ServiceMode>(null);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 760px)").matches);
+  // Only the first mobile app entry shows the splash; returning to service selection does not.
+  const [showMobileSplash, setShowMobileSplash] = useState(
+    () => window.matchMedia("(max-width: 760px)").matches
+  );
+
+  useEffect(() => {
+    if (!showMobileSplash) return;
+    const timer = window.setTimeout(() => setShowMobileSplash(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [showMobileSplash]);
+
 
   useEffect(() => {
     const query = window.matchMedia("(max-width: 760px)");
@@ -17,6 +28,24 @@ export default function App() {
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
   }, []);
+
+  // Display the provided artwork for two seconds on initial mobile entry.
+  if (showMobileSplash && isMobile) {
+    return (
+      <main
+        aria-label="숨길 시작 화면"
+        className="fixed inset-0 flex h-dvh w-full items-center justify-center overflow-hidden"
+        style={{ backgroundColor: "#ecfaf4" }}
+      >
+        <img
+          src="/soom-mobile-splash.webp"
+          alt="숨길의 수미, 구리, 당당 캐릭터가 위치 아이콘 주변에 모인 시작 화면"
+          className="h-full w-full object-contain"
+          fetchPriority="high"
+        />
+      </main>
+    );
+  }
 
   // 최초 서비스 선택 화면
   if (serviceMode === null) {
