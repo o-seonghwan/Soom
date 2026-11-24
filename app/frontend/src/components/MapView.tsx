@@ -48,6 +48,7 @@ const GANGNAM_CENTER: Coordinate = [
 
 interface MapViewProps {
   audience?: "b2c" | "b2g";
+  mobileB2C?: boolean;
   start: Coordinate | null;
   end: Coordinate | null;
   routes: Route[];
@@ -242,6 +243,7 @@ const reportLabels: Record<Report["type"], string> = {
 
 export default function MapView({
   audience = "b2c",
+  mobileB2C = false,
   start,
   end,
   routes,
@@ -360,7 +362,7 @@ export default function MapView({
   }, []);
 
   return (
-    <div className="relative h-full w-full">
+    <div className={`relative h-full w-full ${mobileB2C ? "soom-mobile-map" : ""}`}>
       <MapContainer
         className="lung-map"
         center={GANGNAM_CENTER}
@@ -644,7 +646,7 @@ export default function MapView({
       </MapContainer>
 
       {audience === "b2c" && onSelectLocation && onSwapLocations && onSearch && onAddressTextChange && onAddressChoose && onAddressApply && (
-        <div className="pointer-events-none absolute left-3 top-3 z-[800] w-[min(440px,calc(100%-5.5rem))]">
+        <div className="pointer-events-none absolute left-3 top-3 z-[800] w-[min(440px,calc(100%-5.5rem))] soom-mobile-address-card">
           <MapRouteCard start={start} end={end} selectionMode={selectionMode}
             startText={startInputText} endText={endInputText} loading={routeLoading}
             onMapSelect={onSelectLocation} onTextChange={onAddressTextChange}
@@ -653,9 +655,9 @@ export default function MapView({
         </div>
       )}
 
-      <div className={`absolute right-3 top-3 z-[650] flex items-start gap-2 ${audience === "b2c" ? "max-[760px]:top-[132px]" : ""}`}>
+      <div className={`absolute right-3 top-3 z-[650] flex items-start gap-2 ${audience === "b2c" ? "max-[760px]:top-[132px]" : ""} ${mobileB2C ? "soom-mobile-tools" : ""}`}>
         {audience === "b2c" && avoidanceLevel !== undefined && onAvoidanceLevelChange && (
-          <div className="w-[min(220px,calc(100vw-5.5rem))]">
+          <div className="w-[min(220px,calc(100vw-5.5rem))] soom-mobile-slider-original">
             <RoutePanel avoidanceLevel={avoidanceLevel} onAvoidanceLevelChange={onAvoidanceLevelChange} />
           </div>
         )}
