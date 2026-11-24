@@ -11,7 +11,7 @@ export async function lookupAddress(point: Coordinate, signal?: AbortSignal): Pr
   if (!response.ok) throw new Error(`주소 조회 오류 ${response.status}`);
   const data: unknown = await response.json();
   if (data && typeof data === "object" && "source" in data && data.source === "unconfigured") {
-    throw new Error("주소 변환을 사용하려면 백엔드 Railway에 VWORLD_API_KEY를 설정해야 합니다.");
+    throw new Error("주소 변환을 사용하려면 백엔드 Railway에 KAKAO_REST_API_KEY를 설정해야 합니다.");
   }
   if (data && typeof data === "object" && "address" in data) {
     const address = (data as { address: unknown }).address;
