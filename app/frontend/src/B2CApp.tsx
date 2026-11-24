@@ -443,7 +443,8 @@ export default function App() {
   function updateLocation(
     mode: LocationMode,
     point: Coordinate,
-    textLabel?: string
+    textLabel?: string,
+    focusMap = true
   ) {
     cancelPendingRouteSearch();
     if (mode === "start") {
@@ -456,7 +457,7 @@ export default function App() {
       setEndText(textLabel ?? formatCoordinate(point));
     }
 
-    setFocusPoint([...point]);
+    if (focusMap) setFocusPoint([...point]);
     clearSearchResult();
   }
 
@@ -526,7 +527,6 @@ export default function App() {
   function handleMapClick(point: Coordinate) {
     if (pageMode === "report") {
       setReportLocation(point);
-      setFocusPoint([...point]);
       setReportNotice(null);
       return;
     }
@@ -535,7 +535,7 @@ export default function App() {
       return;
     }
 
-    updateLocation(selectionMode, point);
+    updateLocation(selectionMode, point, undefined, false);
 
     if (selectionMode === "start") {
       setSelectionMode("end");
