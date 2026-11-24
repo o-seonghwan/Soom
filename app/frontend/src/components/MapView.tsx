@@ -26,7 +26,6 @@ import type { DbscanSitesResponse } from "../types/dbscan";
 import type { AddressSuggestion } from "../services/addressSearchService";
 import type { ChildcareExposure } from "../types/childcare";
 import MapRouteCard from "./MapRouteCard";
-import RoutePanel from "./RoutePanel";
 import type { RouteRequest } from "../types/route";
 import { deduplicateCleanEdges } from "../utils/deduplicateCleanEdges";
 import "leaflet/dist/leaflet.css";
@@ -257,8 +256,6 @@ export default function MapView({
   reports,
   showRisks,
   showReports,
-  avoidanceLevel,
-  onAvoidanceLevelChange,
   onToggleCleanliness,
   onToggleReports,
   riskNoticeOpen = false,
@@ -656,11 +653,6 @@ export default function MapView({
       )}
 
       <div className={`absolute right-3 top-3 z-[650] flex items-start gap-2 ${audience === "b2c" ? "max-[760px]:top-[132px]" : ""} ${mobileB2C ? "soom-mobile-tools" : ""}`}>
-        {audience === "b2c" && avoidanceLevel !== undefined && onAvoidanceLevelChange && (
-          <div className="w-[min(220px,calc(100vw-5.5rem))] soom-mobile-slider-original">
-            <RoutePanel avoidanceLevel={avoidanceLevel} onAvoidanceLevelChange={onAvoidanceLevelChange} />
-          </div>
-        )}
         <div className="flex flex-col items-end gap-2">
         <button type="button" onClick={onToggleCleanliness}
           aria-label={showRisks ? "보행로 청정지수 숨기기" : "보행로 청정지수 표시"}
