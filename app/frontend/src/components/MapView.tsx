@@ -151,7 +151,7 @@ function MapFocus({
 }
 
 // Once routing finishes, fit the complete route bounds rather than the last selected point.
-function FitRoutes({ routes }: { routes: Route[] }) {
+function FitRoutes({ routes, mobile }: { routes: Route[]; mobile: boolean }) {
   const map = useMap();
   useEffect(() => {
     if (routes.length === 0) return;
@@ -159,14 +159,25 @@ function FitRoutes({ routes }: { routes: Route[] }) {
     if (points.length === 0) return;
     const bounds = L.latLngBounds(points.map(([lat, lng]) => [lat, lng] as [number, number]));
     if (bounds.isValid()) {
+      // Mobile results sit behind a bottom sheet. Use its actual height so
+      // fitting a route keeps both endpoints visible in the uncovered map.
+      const sheet = mobile && window.matchMedia("(max-width: 760px)").matches
+        ? document.querySelector<HTMLElement>('[aria-label="모바일 경로 및 제보 패널"]')
+        : null;
+      const sheetHeight = sheet?.getBoundingClientRect().height ?? 0;
+      const availableHeight = map.getSize().y;
+      const bottomPadding = sheet
+        ? Math.min(sheetHeight + 24, Math.max(65, availableHeight - 180))
+        : 65;
+
       map.fitBounds(bounds.pad(0.06), {
         animate: true,
         paddingTopLeft: [35, 155],
-        paddingBottomRight: [45, 65],
+        paddingBottomRight: [45, bottomPadding],
         maxZoom: 17,
       });
     }
-  }, [map, routes]);
+  }, [map, routes, mobile]);
   return null;
 }
 
@@ -395,7 +406,7 @@ export default function MapView({
         {/* 지도 입력 및 이동 */}
         <MapClickHandler onMapClick={onMapClick} panOnClick={audience === "b2c"} />
         <MapFocus point={focusPoint} mobile={mobileB2C} />
-        <FitRoutes routes={fitBoundsRoutes} />
+        <FitRoutes routes={fitBoundsRoutes} mobile={mobileB2C} />
 
         {/* 강남구 전체가 보이도록 초기 조정 */}
         <BoundaryFocus boundary={boundary} focusPoint={focusPoint} />
