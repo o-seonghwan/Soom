@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useId } from "react";
 import type { RouteRequest } from "../types/route";
 
 interface Props {
@@ -6,55 +6,22 @@ interface Props {
   onAvoidanceLevelChange: (value: RouteRequest["avoidanceLevel"]) => void;
 }
 
-/** Compact persistent control next to the cleanliness toggle. */
+/** Shared B2C slider style for desktop and mobile. */
 export default function RoutePanel({ avoidanceLevel, onAvoidanceLevelChange }: Props) {
-  const [draft, setDraft] = useState(avoidanceLevel);
-  const lastCommitted = useRef(avoidanceLevel);
-
-  useEffect(() => {
-    setDraft(avoidanceLevel);
-    lastCommitted.current = avoidanceLevel;
-  }, [avoidanceLevel]);
-
-  function commit(value: number) {
-    const next = Math.max(0, Math.min(100, Math.round(value / 20) * 20));
-    if (next === lastCommitted.current) return;
-    lastCommitted.current = next;
-    onAvoidanceLevelChange(next);
-  }
-
+  const id = useId();
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <label htmlFor="avoidance-level" className="whitespace-nowrap text-xs font-bold text-slate-800">
-          회피 강도
-        </label>
-        <output htmlFor="avoidance-level" className="text-xs font-bold tabular-nums text-green-700">
-          {draft}%
-        </output>
+    <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+      <div className="mb-1.5 flex justify-between text-xs font-bold text-slate-800">
+        <label htmlFor={id}>회피 강도</label>
+        <output htmlFor={id} className="text-emerald-700">{avoidanceLevel}%</output>
       </div>
-      <div className="relative">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-[8px] top-2.5 flex -translate-y-1/2 justify-between">
-          {[0, 20, 40, 60, 80, 100].map(value => (
-            <span key={value} className="h-1.5 w-1.5 rounded-full bg-slate-500" />
-          ))}
-        </div>
-        <input id="avoidance-level" type="range" min={0} max={100} step={20} value={draft}
-          onChange={event => setDraft(Number(event.currentTarget.value))}
-          onPointerUp={event => commit(Number(event.currentTarget.value))}
-          onKeyUp={event => commit(Number(event.currentTarget.value))}
-          onBlur={event => commit(Number(event.currentTarget.value))}
-          aria-label="간접흡연 회피 강도" aria-valuetext={`${draft}%`}
-          title="20% 단위로 선택하며, 드래그 후 놓으면 경로가 갱신됩니다."
-          className="relative z-10 block h-5 w-full cursor-pointer accent-green-600"
-        />
-        <div aria-hidden="true" className="flex justify-between text-[9px] tabular-nums text-slate-500">
-          {[0, 20, 40, 60, 80, 100].map(value => <span key={value}>{value}</span>)}
-        </div>
-      </div>
-      <div className="mt-0.5 flex justify-between gap-1 text-[10px] text-slate-500">
-        <span>거리 우선</span>
-        <span>회피 우선</span>
+      <input id={id} aria-label="간접흡연 회피 강도" type="range"
+        min={0} max={100} step={20} value={avoidanceLevel}
+        onChange={event => onAvoidanceLevelChange(Number(event.currentTarget.value))}
+        className="w-full accent-emerald-500"
+      />
+      <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+        <span>거리 우선</span><span>위험 회피 우선</span>
       </div>
     </div>
   );
