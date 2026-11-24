@@ -40,7 +40,7 @@ export default function App() {
         <img
           src="/soom-mobile-splash.webp"
           alt="숨길의 수미, 구리, 당당 캐릭터가 위치 아이콘 주변에 모인 시작 화면"
-          className="h-full w-full scale-[1.3] object-contain"
+          className="h-full w-full object-contain"
           fetchPriority="high"
         />
       </main>
@@ -58,8 +58,8 @@ export default function App() {
         }}
       >
         <div className="mx-auto w-full max-w-[970px]">
-          <header className="mb-4 flex w-full items-center justify-between gap-3 min-[761px]:grid min-[761px]:grid-cols-[1fr_auto_1fr] min-[761px]:gap-0">
-            <div className="flex shrink-0 items-center gap-2 min-[761px]:col-start-2 min-[761px]:justify-self-center" aria-label="숨길">
+          <header className="mb-4 flex w-full items-center justify-between gap-3 min-[761px]:relative min-[761px]:min-h-[80px] min-[761px]:justify-end min-[761px]:gap-0">
+            <div className="flex shrink-0 items-center gap-2 min-[761px]:absolute min-[761px]:left-1/2 min-[761px]:-translate-x-1/2" aria-label="숨길">
               <svg width="43" height="60" viewBox="0 0 46 64" role="img" aria-label="숨길 위치 로고" className="h-[50px] w-[36px] min-[761px]:h-[60px] min-[761px]:w-[43px]">
                 <defs>
                   <linearGradient id="soomPinGradient" x1="0" y1="0" x2="1" y2="1">
@@ -80,7 +80,7 @@ export default function App() {
             <img
               src="/soom-service-mascots.webp"
               alt="손을 잡고 인사하는 수미, 구리, 당당"
-              className="h-auto w-[min(57%,255px)] shrink object-contain min-[761px]:col-start-3 min-[761px]:w-[264px] min-[761px]:justify-self-end"
+              className="h-auto w-[min(57%,255px)] shrink object-contain min-[761px]:w-[264px]"
             />
           </header>
 
