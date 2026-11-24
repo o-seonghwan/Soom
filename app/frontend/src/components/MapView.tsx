@@ -72,6 +72,7 @@ interface MapViewProps {
   onCloseRiskNotice?: () => void;
   reportLocation: Coordinate | null;
   focusPoint: Coordinate | null;
+  addressLookupNotice?: string | null;
   selectionMode?: "start" | "end";
   startAddress?: string | null;
   endAddress?: string | null;
@@ -731,6 +732,12 @@ export default function MapView({
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-green-500" />승인</span>
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-slate-400" />반려</span>
         </div>
+      )}
+
+      {audience === "b2c" && addressLookupNotice && (
+        <p role="status" className="pointer-events-none absolute bottom-3 left-3 z-[800] max-w-[min(390px,calc(100%-24px))] rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 text-xs text-amber-950 shadow max-[760px]:bottom-[230px]">
+          {addressLookupNotice}
+        </p>
       )}
 
       {!import.meta.env.VITE_CARTO_API_KEY && (
