@@ -55,7 +55,6 @@ export default function B2GDashboard() {
   const [selectedDbscanCluster, setSelectedDbscanCluster] = useState<string | null>(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [adminAuthorized, setAdminAuthorized] = useState(false);
-  const [logoutSignal, setLogoutSignal] = useState(0);
 
   const [focusPoint, setFocusPoint] =
     useState<Coordinate | null>(null);
@@ -251,17 +250,10 @@ export default function B2GDashboard() {
       {/* Header admin control: left of the existing service selector in App.tsx. */}
       <div className="absolute right-[4.25rem] top-3 z-[1201] flex items-center gap-2">
         <button type="button"
-          onClick={() => {
-            if (adminAuthorized) {
-              setLogoutSignal(value => value + 1);
-              setShowAdminPanel(false);
-            } else {
-              setShowAdminPanel(value => !value);
-            }
-          }}
-          aria-expanded={!adminAuthorized ? showAdminPanel : undefined}
+          onClick={() => setShowAdminPanel(value => !value)}
+          aria-expanded={showAdminPanel}
           className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow">
-          {adminAuthorized ? "관리자 로그아웃" : "관리자 로그인"}
+          {adminAuthorized ? "관리자 정보" : "관리자 로그인"}
         </button>
       </div>
 
@@ -305,14 +297,13 @@ export default function B2GDashboard() {
               setDashboardTarget(null);
             }
           }}
-          logoutSignal={logoutSignal}
         />
       </aside>
 
       {/* Tabs and analysis content share one fixed-width sidebar. */}
       <main className="flex min-h-0 flex-1">
         {adminAuthorized && (
-          <div className="flex h-full w-[min(320px,72vw)] shrink-0 flex-col overflow-hidden rounded-t-xl border-r border-slate-200 bg-white">
+          <div className="flex h-full w-[min(440px,72vw)] shrink-0 flex-col overflow-hidden rounded-t-xl border-r border-slate-200 bg-white">
             <nav aria-label="지자체 분석 메뉴" className="z-[900] shrink-0 overflow-hidden rounded-t-xl border-b border-slate-200 bg-white">
               <div role="tablist" aria-label="지자체 분석 탭" className="grid min-w-0 grid-cols-3 gap-0">
                 {([
