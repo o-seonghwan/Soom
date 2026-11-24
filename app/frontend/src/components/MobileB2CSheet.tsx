@@ -29,9 +29,25 @@ export default function MobileB2CSheet({
 
   // Unknown links are excluded. This is a relative model-derived index,
   // not a measured air quality or smoke exposure probability.
+  function lengthM(coordinates: [number, number][]) {
+    let total = 0;
+    for (let i = 1; i < coordinates.length; i++) {
+      const [latA, lngA] = coordinates[i - 1];
+      const [latB, lngB] = coordinates[i];
+      const radians = Math.PI / 180;
+      const dLat = (latB - latA) * radians;
+      const dLng = (lngB - lngA) * radians;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(latA * radians) * Math.cos(latB * radians) * Math.sin(dLng / 2) ** 2;
+      total += 12742000 * Math.asin(Math.min(1, Math.sqrt(a)));
+    }
+    return total;
+  }
   const scoredSegments = active?.segments?.filter(segment => segment.cleanIndex !== null) ?? [];
-  const meanCleanIndex = scoredSegments.length
-    ? scoredSegments.reduce((sum, segment) => sum + (segment.cleanIndex ?? 0), 0) / scoredSegments.length
+  const scoredLength = scoredSegments.reduce((sum, segment) => sum + lengthM(segment.coordinates), 0);
+  const meanCleanIndex = scoredLength > 0
+    ? scoredSegments.reduce((sum, segment) =>
+        sum + (segment.cleanIndex ?? 0) * lengthM(segment.coordinates), 0) / scoredLength
     : null;
 
   return (
@@ -94,7 +110,7 @@ export default function MobileB2CSheet({
                   </p>
                   <p className="pb-0.5 text-right text-[11px] text-slate-500">
                     {(active.distanceM / 1000).toFixed(2)}km
-                    {meanCleanIndex !== null && <> · 청정지수 {meanCleanIndex.toFixed(0)}</>}
+                    {meanCleanIndex !== null && <> · 평균 청정지수 {meanCleanIndex.toFixed(0)}</>}
                   </p>
                 </div>
               ) : <p className="mt-2 text-sm text-slate-600">출발지와 목적지를 입력해 경로를 검색하세요.</p>}
