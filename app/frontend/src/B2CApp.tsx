@@ -189,6 +189,7 @@ export default function App() {
 
   const [startText, setStartText] = useState("");
   const [endText, setEndText] = useState("");
+  const [addressLookupNotice, setAddressLookupNotice] = useState<string | null>(null);
   // Bind lookup results to their coordinates so an old address never flashes for a new point.
   const [startLookup, setStartLookup] = useState<{ key: string; address: string | null } | null>(null);
   const [endLookup, setEndLookup] = useState<{ key: string; address: string | null } | null>(null);
@@ -201,8 +202,8 @@ export default function App() {
     const controller = new AbortController();
     const key = start.join(",");
     void lookupAddress(start, controller.signal)
-      .then(address => { if (!controller.signal.aborted) { setStartLookup({ key, address }); if (address) setStartText(value => value === formatCoordinate(start) ? address : value); } })
-      .catch(error => { if (!controller.signal.aborted) { console.warn("출발지 주소 조회:", error); setStartLookup({ key, address: null }); } });
+      .then(address => { if (!controller.signal.aborted) { setStartLookup({ key, address }); if (address) { setAddressLookupNotice(null); setStartText(value => value === formatCoordinate(start) ? address : value); } } })
+      .catch(error => { if (!controller.signal.aborted) { console.warn("출발지 주소 조회:", error); setAddressLookupNotice(error instanceof Error ? error.message : "주소 변환에 실패했습니다."); setStartLookup({ key, address: null }); } });
     return () => controller.abort();
   }, [start]);
 
@@ -211,8 +212,8 @@ export default function App() {
     const controller = new AbortController();
     const key = end.join(",");
     void lookupAddress(end, controller.signal)
-      .then(address => { if (!controller.signal.aborted) { setEndLookup({ key, address }); if (address) setEndText(value => value === formatCoordinate(end) ? address : value); } })
-      .catch(error => { if (!controller.signal.aborted) { console.warn("목적지 주소 조회:", error); setEndLookup({ key, address: null }); } });
+      .then(address => { if (!controller.signal.aborted) { setEndLookup({ key, address }); if (address) { setAddressLookupNotice(null); setEndText(value => value === formatCoordinate(end) ? address : value); } } })
+      .catch(error => { if (!controller.signal.aborted) { console.warn("목적지 주소 조회:", error); setAddressLookupNotice(error instanceof Error ? error.message : "주소 변환에 실패했습니다."); setEndLookup({ key, address: null }); } });
     return () => controller.abort();
   }, [end]);
 
@@ -729,6 +730,7 @@ export default function App() {
           onCloseRiskNotice={closeRiskNotice}
           reportLocation={reportLocation}
           focusPoint={focusPoint}
+          addressLookupNotice={addressLookupNotice}
           selectionMode={selectionMode}
           startAddress={startAddress}
           endAddress={endAddress}
