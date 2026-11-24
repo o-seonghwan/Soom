@@ -1,11 +1,11 @@
 """
 [문해솔 1] B2C · 비흡연자 — 간접흡연 위험 지도
-해결방법: 보행 지점 특성에 분류 모델 7개를 적용하고 공간 블록 시험셋으로 비교
+해결방법: 보행 지점 특성에 분류 모델 8개를 적용하고 공간 블록 시험셋으로 비교
 정답 데이터: 강남구 담배꽁초 적발 장소 좌표에서 21m 이내인 보행 지점 = 1
 
 하는 일
  1) 별도 전처리에서 만든 보행 지점 CSV 불러오기
- 2) 분류 모델 7개와 기준 2개(생활인구 지수, 같은비중 지수)를
+ 2) 분류 모델 8개와 기준 2개(생활인구 지수, 같은비중 지수)를
     1km 블록을 8:2로 한 번 분할해 비교. 시험 지점에서 정답 반경의 두 배 이내인 학습 지점은 제외
  3) 공간 5-Fold 튜닝에서 선정한 XGBoost(깊이 3)로 모든 지점에 위험 순위(0~100) 매기기 + 시간대별 격자 위험
  4) (선택) 다른 구 검증: 강남에서 배운 모델로 마포구를 예측해 마포구 상습 투기지역과 맞춰 봄
@@ -17,6 +17,7 @@
 정답 0은 좌표가 확인된 적발 장소의 21m 밖 지점이다. 적발 자료는 단속 위치와 강도에 영향을 받는다.
 위험확률 열은 지도에 쓰는 모델 점수이며 현장에서 측정한 간접흡연 확률과는 다르다.
 """
+import argparse
 import joblib
 import numpy as np
 import pandas as pd
@@ -26,8 +27,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import accuracy_score, average_precision_score, f1_score, roc_auc_score
+from sklearn.metrics import accuracy_score, average_precision_score, f1_score, fbeta_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 import sys as _sys
 from pathlib import Path as _Path
@@ -49,21 +51,28 @@ def evaluate(y, s):
     return {"AUC": roc_auc_score(y, s), "AP": average_precision_score(y, s), "상위10%_정답포착률": C.top_capture(y, s)}
 
 
-def evaluate_classifier(name, y_test, pred, proba):
+def evaluate_classifier(name, y_test, pred, scores):
     result = {
-        "방법": name, **evaluate(y_test, proba),
-        "정확도": accuracy_score(y_test, pred), "F1": f1_score(y_test, pred, zero_division=0),
+        "방법": name, **evaluate(y_test, scores),
+        "정확도": accuracy_score(y_test, pred),
+        "정밀도": precision_score(y_test, pred, zero_division=0),
+        "재현율": recall_score(y_test, pred, zero_division=0),
+        "F1": f1_score(y_test, pred, zero_division=0),
+        "F2": fbeta_score(y_test, pred, beta=2, zero_division=0),
     }
     print("시험셋 예측 예시", pred[:10])
-    print("시험셋 양성 확률 예시", proba[:5].round(3))
+    print("시험셋 양성 점수 예시", scores[:5].round(3))
     print("정확도", round(result["정확도"], 4))
+    print("정밀도", round(result["정밀도"], 4))
+    print("재현율", round(result["재현율"], 4))
     print("F1", round(result["F1"], 4))
+    print("F2", round(result["F2"], 4))
     print("시험셋 AP", round(result["AP"], 4))
     print("시험셋 AUC", round(result["AUC"], 4))
     return result
 
 
-def main():
+def main(comparison_only=False):
     try:
         from xgboost import XGBClassifier
         from lightgbm import LGBMClassifier
@@ -74,15 +83,14 @@ def main():
     print("<학습용 CSV 불러오기>")
     print("######################################################################")
     path = C.TRAINING_DATA_PATH
-    if not path.is_file() or not C.TRAINING_HOURLY_PATH.is_file():
+    if not path.is_file() or (not comparison_only and not C.TRAINING_HOURLY_PATH.is_file()):
         raise SystemExit("먼저 같은 폴더의 0_머신러닝_전처리.py를 실행하세요.")
     data = pd.read_csv(path, encoding="utf-8-sig", float_precision="round_trip")
     if not set(C.LABEL_DETAIL_COLUMNS).issubset(data.columns):
         raise ValueError("21m 정답과 거리 등급을 만들려면 0번 전처리를 다시 실행하세요.")
-    hourly = pd.read_csv(C.TRAINING_HOURLY_PATH, index_col=0)
     C.OUT_DIR = str(path.parent)
 
-    # 좌표·ID·블록은 분할 및 지도용이다. 7개 모델에는 동일한 18개 특성을 넣는다.
+    # 좌표·ID·블록은 분할 및 지도용이다. 8개 모델에는 동일한 18개 특성을 넣는다.
     FE = C.model_features(data)
     if len(FE) != len(C.FEATURES):
         raise ValueError("학습용 CSV의 특성 열이 부족합니다. 0번 전처리를 다시 실행하세요.")
@@ -232,6 +240,17 @@ def main():
     rows.append(evaluate_classifier(name, y_test, pred, proba))
     print("######################################################################", end)
 
+    ### 8. RBF 서포트 벡터 머신 (분류) ###
+    print("<RBF SVM 학습과 예측>")
+    name = "SVM"
+    classifier = SVC(kernel="rbf", C=1.0, gamma="scale", random_state=SEED)
+    model = C.prepare_classifier(classifier, scale=True)
+    model.fit(X_train, y_train)
+    pred = model.predict(X_test)
+    # 순위 지표에는 양성 클래스 방향의 결정 점수를 사용한다.
+    scores = model.decision_function(X_test)
+    rows.append(evaluate_classifier(name, y_test, pred, scores))
+
     print("<성능 비교와 최종 모델 선택>")
     print("######################################################################")
     ranked = pd.DataFrame(rows).sort_values(["AP", "AUC"], ascending=False)
@@ -246,7 +265,10 @@ def main():
         # 점수가 모두 같아 상위 10% 순위를 정할 수 없다.
         "상위10%_정답포착률": np.nan,
         "정확도": accuracy_score(y_test, zero_pred),
+        "정밀도": precision_score(y_test, zero_pred, zero_division=0),
+        "재현율": recall_score(y_test, zero_pred, zero_division=0),
         "F1": f1_score(y_test, zero_pred, zero_division=0),
+        "F2": fbeta_score(y_test, zero_pred, beta=2, zero_division=0),
     })
     perf = pd.DataFrame(rows).sort_values(["AP", "AUC"], ascending=False)
     perf["AP_무작위기준"] = y_test.mean()
@@ -256,6 +278,10 @@ def main():
     C.log(f"공간 5-Fold 튜닝으로 선정한 최종 모델: {best} (최대 깊이 3)")
     print("######################################################################", end)
 
+    if comparison_only:
+        return
+
+    hourly = pd.read_csv(C.TRAINING_HOURLY_PATH, index_col=0)
     print("\n<전체 데이터 학습과 위험지도 저장>")
     print("######################################################################")
     rf = clone(classifiers["랜덤포레스트"]).fit(X, y)
@@ -302,4 +328,7 @@ def validate_other(model, features):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--comparison-only", action="store_true",
+                        help="모델 비교 CSV만 저장하고 위험지도는 생성하지 않습니다.")
+    main(comparison_only=parser.parse_args().comparison_only)

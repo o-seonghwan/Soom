@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import MapView from "./components/MapView";
 import ReportForm from "./components/ReportForm";
@@ -119,11 +119,14 @@ export default function App() {
       locationConsentRef.current = false;
       return;
     }
-    const agreed = window.confirm(
-      "숨길에서 내 위치를 지도에 표시하기 위해 위치 정보 사용에 동의하시겠습니까? 동의하면 B2C 이용 중 위치가 갱신되며, 지도는 현재 위치 버튼을 누를 때만 이동합니다."
-    );
-    locationConsentRef.current = agreed;
-    setLocationTrackingEnabled(agreed);
+    const timer = window.setTimeout(() => {
+      const agreed = window.confirm(
+        "숨길에서 내 위치를 지도에 표시하기 위해 위치 정보 사용에 동의하시겠습니까? 동의하면 B2C 이용 중 위치가 갱신되며, 지도는 현재 위치 버튼을 누를 때만 이동합니다."
+      );
+      locationConsentRef.current = agreed;
+      setLocationTrackingEnabled(agreed);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -517,8 +520,10 @@ export default function App() {
 
   const latestStartText = useRef(startText);
   const latestEndText = useRef(endText);
-  latestStartText.current = startText;
-  latestEndText.current = endText;
+  useLayoutEffect(() => {
+    latestStartText.current = startText;
+    latestEndText.current = endText;
+  }, [startText, endText]);
 
   // =======================================
   // 8. 지도 클릭

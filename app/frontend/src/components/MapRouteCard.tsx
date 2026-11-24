@@ -37,15 +37,19 @@ export default function MapRouteCard({
 
   useEffect(() => {
     if (!activeMode || query.trim().length < 2) {
-      setSuggestions([]);
-      setSearching(false);
-      setLookupError("");
-      return;
+      const reset = window.setTimeout(() => {
+        setSuggestions([]);
+        setSearching(false);
+        setLookupError("");
+      }, 0);
+      return () => window.clearTimeout(reset);
     }
     const controller = new AbortController();
     const seq = ++requestSeq.current;
-    setSearching(true);
-    setLookupError("");
+    const begin = window.setTimeout(() => {
+      setSearching(true);
+      setLookupError("");
+    }, 0);
     const timer = window.setTimeout(() => {
       void suggestAddresses(query.trim(), controller.signal)
         .then(items => {
@@ -64,6 +68,7 @@ export default function MapRouteCard({
     }, 300);
     return () => {
       controller.abort();
+      window.clearTimeout(begin);
       window.clearTimeout(timer);
     };
   }, [activeMode, query]);
