@@ -152,23 +152,29 @@ export default function App() {
 
   function focusCurrentLocation() {
     if (!navigator.geolocation) {
-      window.alert("현재 위치 기능을 지원하지 않습니다.");
+      window.alert("이 기기는 위치 기능을 지원하지 않습니다.");
       return;
     }
-    if (currentLocation) {
-      setFocusPoint([...currentLocation]);
-      return;
-    }
-    // A declined entry consent can be enabled by explicitly tapping locate.
-    if (!locationTrackingEnabled) {
-      const agreed = window.confirm(
-        "내 위치 표시를 활성화하시겠습니까? 동의하면 B2C 이용 중 위치가 계속 갱신됩니다."
-      );
-      if (!agreed) return;
-      locationConsentRef.current = true;
-      setLocationTrackingEnabled(true);
-    }
-    focusOnNextLocationRef.current = true;
+
+    // On-demand location lookup avoids relying solely on watchPosition:
+    // a watch callback may be delayed by a mobile browser or its permissions.
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const point: Coordinate = [position.coords.latitude, position.coords.longitude];
+        setCurrentLocation(point);
+        setFocusPoint([...point]);
+        focusOnNextLocationRef.current = false;
+      },
+      error => {
+        const message = error.code === 1
+          ? "위치 권한이 거부되었습니다. 브라우저의 사이트 설정에서 위치 권한을 허용해 주세요."
+          : error.code === 2
+            ? "현재 위치를 확인할 수 없습니다. 기기의 위치 서비스를 켜고 다시 시도해 주세요."
+            : "위치 확인 시간이 초과되었습니다. 다시 시도해 주세요.";
+        window.alert(message);
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
   }
 
   // ---------------------------------------
