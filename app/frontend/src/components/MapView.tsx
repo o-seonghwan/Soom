@@ -123,19 +123,22 @@ function ResizeB2GMap() {
 // 특정 위치로 지도 이동
 function MapFocus({
   point,
+  mobile,
 }: {
   point: Coordinate | null;
+  mobile: boolean;
 }) {
   const map = useMap();
 
   useEffect(() => {
     if (!point) return;
 
-    map.flyTo(
-      point,
-      Math.max(map.getZoom(), 15),
-    );
-  }, [map, point]);
+    // Mobile flyTo animation can be cancelled by a simultaneous pinch/drag
+    // or initial boundary fit; setView is deterministic for the locate button.
+    const zoom = Math.max(map.getZoom(), 15);
+    if (mobile) map.setView(point, zoom, { animate: false });
+    else map.flyTo(point, zoom);
+  }, [map, point, mobile]);
 
   return null;
 }
@@ -163,8 +166,10 @@ function FitRoutes({ routes }: { routes: Route[] }) {
 // 최초 경계 데이터 로딩 시 강남구 전체 표시
 function BoundaryFocus({
   boundary,
+  focusPoint,
 }: {
   boundary: GeoJsonObject | null;
+  focusPoint: Coordinate | null;
 }) {
   const map = useMap();
 
@@ -381,11 +386,11 @@ export default function MapView({
 
         {/* 지도 입력 및 이동 */}
         <MapClickHandler onMapClick={onMapClick} />
-        <MapFocus point={focusPoint} />
+        <MapFocus point={focusPoint} mobile={mobileB2C} />
         <FitRoutes routes={fitBoundsRoutes} />
 
         {/* 강남구 전체가 보이도록 초기 조정 */}
-        <BoundaryFocus boundary={boundary} />
+        <BoundaryFocus boundary={boundary} focusPoint={focusPoint} />
 
         {/* 강남구 행정경계 */}
         {/* 강남구 외부 블라인드 마스크 */}
