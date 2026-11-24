@@ -26,7 +26,6 @@ import type { DbscanSitesResponse } from "../types/dbscan";
 import type { AddressSuggestion } from "../services/addressSearchService";
 import type { ChildcareExposure } from "../types/childcare";
 import MapRouteCard from "./MapRouteCard";
-import RoutePanel from "./RoutePanel";
 import type { RouteRequest } from "../types/route";
 import { deduplicateCleanEdges } from "../utils/deduplicateCleanEdges";
 import "leaflet/dist/leaflet.css";
@@ -48,6 +47,7 @@ const GANGNAM_CENTER: Coordinate = [
 
 interface MapViewProps {
   audience?: "b2c" | "b2g";
+  mobileB2C?: boolean;
   start: Coordinate | null;
   end: Coordinate | null;
   routes: Route[];
@@ -72,6 +72,7 @@ interface MapViewProps {
   onCloseRiskNotice?: () => void;
   reportLocation: Coordinate | null;
   focusPoint: Coordinate | null;
+  addressLookupNotice?: string | null;
   selectionMode?: "start" | "end";
   startAddress?: string | null;
   endAddress?: string | null;
@@ -123,19 +124,22 @@ function ResizeB2GMap() {
 // 특정 위치로 지도 이동
 function MapFocus({
   point,
+  mobile,
 }: {
   point: Coordinate | null;
+  mobile: boolean;
 }) {
   const map = useMap();
 
   useEffect(() => {
     if (!point) return;
 
-    map.flyTo(
-      point,
-      Math.max(map.getZoom(), 15),
-    );
-  }, [map, point]);
+    // Mobile flyTo animation can be cancelled by a simultaneous pinch/drag
+    // or initial boundary fit; setView is deterministic for the locate button.
+    const zoom = Math.max(map.getZoom(), 15);
+    if (mobile) map.setView(point, zoom, { animate: false });
+    else map.flyTo(point, zoom);
+  }, [map, point, mobile]);
 
   return null;
 }
@@ -163,13 +167,15 @@ function FitRoutes({ routes }: { routes: Route[] }) {
 // 최초 경계 데이터 로딩 시 강남구 전체 표시
 function BoundaryFocus({
   boundary,
+  focusPoint,
 }: {
   boundary: GeoJsonObject | null;
+  focusPoint: Coordinate | null;
 }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!boundary) return;
+    if (!boundary || focusPoint) return;
 
     const layer = L.geoJSON(boundary);
     const bounds = layer.getBounds();
@@ -179,7 +185,7 @@ function BoundaryFocus({
         padding: [25, 25],
       });
     }
-  }, [map, boundary]);
+  }, [map, boundary, focusPoint]);
 
   return null;
 }
@@ -242,6 +248,7 @@ const reportLabels: Record<Report["type"], string> = {
 
 export default function MapView({
   audience = "b2c",
+  mobileB2C = false,
   start,
   end,
   routes,
@@ -255,8 +262,6 @@ export default function MapView({
   reports,
   showRisks,
   showReports,
-  avoidanceLevel,
-  onAvoidanceLevelChange,
   onToggleCleanliness,
   onToggleReports,
   riskNoticeOpen = false,
@@ -265,6 +270,7 @@ export default function MapView({
   onCloseRiskNotice,
   reportLocation,
   focusPoint,
+  addressLookupNotice,
   selectionMode = "start",
   routeLoading = false,
   onSearch,
@@ -360,7 +366,7 @@ export default function MapView({
   }, []);
 
   return (
-    <div className="relative h-full w-full">
+    <div className={`relative h-full w-full ${mobileB2C ? "soom-mobile-map" : ""}`}>
       <MapContainer
         className="lung-map"
         center={GANGNAM_CENTER}
@@ -382,11 +388,11 @@ export default function MapView({
 
         {/* 지도 입력 및 이동 */}
         <MapClickHandler onMapClick={onMapClick} />
-        <MapFocus point={focusPoint} />
+        <MapFocus point={focusPoint} mobile={mobileB2C} />
         <FitRoutes routes={fitBoundsRoutes} />
 
         {/* 강남구 전체가 보이도록 초기 조정 */}
-        <BoundaryFocus boundary={boundary} />
+        <BoundaryFocus boundary={boundary} focusPoint={focusPoint} />
 
         {/* 강남구 행정경계 */}
         {/* 강남구 외부 블라인드 마스크 */}
@@ -644,7 +650,7 @@ export default function MapView({
       </MapContainer>
 
       {audience === "b2c" && onSelectLocation && onSwapLocations && onSearch && onAddressTextChange && onAddressChoose && onAddressApply && (
-        <div className="pointer-events-none absolute left-3 top-3 z-[800] w-[min(440px,calc(100%-5.5rem))]">
+        <div className="pointer-events-none absolute left-3 top-3 z-[800] w-[min(440px,calc(100%-5.5rem))] soom-mobile-address-card">
           <MapRouteCard start={start} end={end} selectionMode={selectionMode}
             startText={startInputText} endText={endInputText} loading={routeLoading}
             onMapSelect={onSelectLocation} onTextChange={onAddressTextChange}
@@ -653,12 +659,7 @@ export default function MapView({
         </div>
       )}
 
-      <div className={`absolute right-3 top-3 z-[650] flex items-start gap-2 ${audience === "b2c" ? "max-[760px]:top-[132px]" : ""}`}>
-        {audience === "b2c" && avoidanceLevel !== undefined && onAvoidanceLevelChange && (
-          <div className="w-[min(220px,calc(100vw-5.5rem))]">
-            <RoutePanel avoidanceLevel={avoidanceLevel} onAvoidanceLevelChange={onAvoidanceLevelChange} />
-          </div>
-        )}
+      <div className={`absolute right-3 top-3 z-[650] flex items-start gap-2 ${audience === "b2c" ? "max-[760px]:top-[132px]" : ""} ${mobileB2C ? "soom-mobile-tools" : ""}`}>
         <div className="flex flex-col items-end gap-2">
         <button type="button" onClick={onToggleCleanliness}
           aria-label={showRisks ? "보행로 청정지수 숨기기" : "보행로 청정지수 표시"}
@@ -732,6 +733,12 @@ export default function MapView({
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-green-500" />승인</span>
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-slate-400" />반려</span>
         </div>
+      )}
+
+      {audience === "b2c" && addressLookupNotice && (
+        <p role="status" className="pointer-events-none absolute bottom-3 left-3 z-[800] max-w-[min(390px,calc(100%-24px))] rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 text-xs text-amber-950 shadow max-[760px]:bottom-[230px]">
+          {addressLookupNotice}
+        </p>
       )}
 
       {!import.meta.env.VITE_CARTO_API_KEY && (

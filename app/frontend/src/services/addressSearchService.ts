@@ -24,7 +24,7 @@ async function checkResponse(response: Response): Promise<void> {
 }
 
 export async function suggestAddresses(query: string, signal?: AbortSignal): Promise<AddressSuggestion[]> {
-  const url = new URL(`${API_BASE_URL}/api/search-addresses`);
+  const url = new URL(`${API_BASE_URL}/api/search-addresses`, window.location.origin);
   url.searchParams.set("q", query);
   const response = await fetch(url.toString(), { signal, cache: "no-store" });
   await checkResponse(response);
@@ -36,7 +36,7 @@ export async function suggestAddresses(query: string, signal?: AbortSignal): Pro
 }
 
 export async function geocodeAddress(query: string, signal?: AbortSignal): Promise<Coordinate> {
-  const url = new URL(`${API_BASE_URL}/api/geocode-address`);
+  const url = new URL(`${API_BASE_URL}/api/geocode-address`, window.location.origin);
   url.searchParams.set("q", query);
   const response = await fetch(url.toString(), { signal, cache: "no-store" });
   await checkResponse(response);

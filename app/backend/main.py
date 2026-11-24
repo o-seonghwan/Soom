@@ -51,7 +51,8 @@ from report_repository import (
     update_report_review,
 )
 
-from admin_auth import require_admin
+from admin_auth import require_admin, require_owner, owner_role
+from admin_accounts import apply_for_admin, list_applications, review_application, rate_limit
 
 
 # =========================================
@@ -458,7 +459,53 @@ def admin_me(
     return {
         "authenticated": True,
         "username": admin_username,
+        "role": owner_role(admin_username),
     }
+
+
+
+# =========================================
+# Approved B2G administrator account requests
+# =========================================
+class AdminApplicationCreate(BaseModel):
+    username: str = Field(min_length=4, max_length=40)
+    password: str = Field(min_length=12, max_length=128)
+    email: str = Field(min_length=3, max_length=254)
+    organization: str = Field(min_length=2, max_length=160)
+    reason: str = Field(min_length=10, max_length=800)
+
+
+class AdminApplicationReview(BaseModel):
+    decision: Literal["approved", "rejected", "disabled"]
+    reviewNote: str = Field(default="", max_length=800)
+
+
+@app.post("/api/admin/applications", status_code=201)
+def request_admin_account(body: AdminApplicationCreate, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    rate_limit("signup:" + client_ip, 5, 3600)
+    try:
+        return apply_for_admin(body.username, body.password, body.email,
+                               body.organization, body.reason)
+    except psycopg.Error as error:
+        raise HTTPException(status_code=503, detail="관리자 계정 신청 DB 연결에 실패했습니다.") from error
+
+
+@app.get("/api/admin/applications")
+def get_admin_applications(_owner: str = Depends(require_owner)):
+    try:
+        return list_applications()
+    except psycopg.Error as error:
+        raise HTTPException(status_code=503, detail="관리자 신청 내역을 조회할 수 없습니다.") from error
+
+
+@app.patch("/api/admin/applications/{account_id}")
+def approve_admin_account(account_id: UUID, body: AdminApplicationReview,
+                          owner: str = Depends(require_owner)):
+    try:
+        return review_application(str(account_id), body.decision, owner, body.reviewNote)
+    except psycopg.Error as error:
+        raise HTTPException(status_code=503, detail="관리자 승인 처리를 완료하지 못했습니다.") from error
 
 
 # =========================================

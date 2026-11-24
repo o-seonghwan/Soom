@@ -1,6 +1,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { AdminAccountApplication, OwnerApplications } from "./AdminAccountWorkflow";
 
 import type { Coordinate } from "../types/route";
 import type { RiskLocation } from "../types/risk";
@@ -96,6 +97,8 @@ export default function AdminDashboard({
 }: AdminDashboardProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showApplication, setShowApplication] = useState(false);
+  const [adminRole, setAdminRole] = useState<"owner" | "admin">("admin");
 
   const [authorized, setAuthorized] =
     useState(false);
@@ -193,6 +196,16 @@ export default function AdminDashboard({
       setAdminReports(data);
       updateNotesFromReports(data);
 
+      // The server decides whether the account is the owner; a client-only
+      // role flag never grants permission to approve applications.
+      const profileResponse = await fetch(`${API_BASE_URL}/api/admin/me`, {
+        headers: { Authorization: makeAuthHeader(username, password) },
+        cache: "no-store",
+      });
+      if (!profileResponse.ok) throw new Error(await getErrorMessage(profileResponse, "관리자 권한을 확인할 수 없습니다."));
+      const profile: { role?: string } = await profileResponse.json();
+      setAdminRole(profile.role === "owner" ? "owner" : "admin");
+
       setAuthorized(true);
       onAuthorizedChange?.(true);
       onSessionChange?.(makeAuthHeader(username, password));
@@ -224,6 +237,7 @@ export default function AdminDashboard({
     onAuthorizedChange?.(false);
     onSessionChange?.(null);
     setAuthorized(false);
+    setAdminRole("admin");
     setUsername("");
     setPassword("");
 
@@ -464,10 +478,17 @@ export default function AdminDashboard({
           </p>
         )}
 
+        <div className="border-t border-slate-200 pt-3">
+          <button type="button" onClick={() => setShowApplication(value => !value)}
+            aria-expanded={showApplication}
+            className="w-full rounded-lg border border-teal-200 bg-teal-50 px-3 py-2.5 text-sm font-bold text-teal-800">
+            {showApplication ? "관리자 계정 신청 닫기" : "새 관리자 계정 신청"}
+          </button>
+          {showApplication && <div className="mt-3"><AdminAccountApplication /></div>}
+        </div>
         <p className="text-xs text-gray-500">
-          현재는 로컬 개발용 관리자 인증입니다.
-          외부 배포 전 인증, 세션 및 HTTPS
-          보완이 필요합니다.
+          제작자 승인 후에만 관리자 데이터에 접근할 수 있습니다.
+          접속 상태가 공유된 기기에서는 사용을 마친 뒤 사이트를 종료하세요.
         </p>
       </div>
     );
@@ -522,19 +543,13 @@ export default function AdminDashboard({
             새로고침
           </button>
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            disabled={
-              busy ||
-              updatingId !== null
-            }
-            className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50"
-          >
-            로그아웃
-          </button>
+
         </div>
       </div>
+
+      {adminRole === "owner" && (
+        <OwnerApplications authorization={makeAuthHeader(username, password)} />
+      )}
 
       {/* Match the actual B2G report marker fill/stroke colors in MapView. */}
       <section aria-label="지도 제보 마커 범례" className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -582,7 +597,7 @@ export default function AdminDashboard({
             key={item.label}
             className="rounded-lg border bg-gray-50 p-3"
           >
-            <p className="text-xs text-gray-500">
+            <p className="whitespace-nowrap text-xs text-gray-500">
               {item.label}
             </p>
 

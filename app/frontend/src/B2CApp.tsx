@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import MapView from "./components/MapView";
 import ReportForm from "./components/ReportForm";
 import RouteResultPanel from "./components/RouteResultPanel";
+import RoutePanel from "./components/RoutePanel";
+import MobileB2CSheet from "./components/MobileB2CSheet";
 import { lookupAddress } from "./services/addressService";
 import { geocodeAddress, type AddressSuggestion } from "./services/addressSearchService";
 
@@ -150,23 +152,29 @@ export default function App() {
 
   function focusCurrentLocation() {
     if (!navigator.geolocation) {
-      window.alert("현재 위치 기능을 지원하지 않습니다.");
+      window.alert("이 기기는 위치 기능을 지원하지 않습니다.");
       return;
     }
-    if (currentLocation) {
-      setFocusPoint([...currentLocation]);
-      return;
-    }
-    // A declined entry consent can be enabled by explicitly tapping locate.
-    if (!locationTrackingEnabled) {
-      const agreed = window.confirm(
-        "내 위치 표시를 활성화하시겠습니까? 동의하면 B2C 이용 중 위치가 계속 갱신됩니다."
-      );
-      if (!agreed) return;
-      locationConsentRef.current = true;
-      setLocationTrackingEnabled(true);
-    }
-    focusOnNextLocationRef.current = true;
+
+    // On-demand location lookup avoids relying solely on watchPosition:
+    // a watch callback may be delayed by a mobile browser or its permissions.
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const point: Coordinate = [position.coords.latitude, position.coords.longitude];
+        setCurrentLocation(point);
+        setFocusPoint([...point]);
+        focusOnNextLocationRef.current = false;
+      },
+      error => {
+        const message = error.code === 1
+          ? "위치 권한이 거부되었습니다. 브라우저의 사이트 설정에서 위치 권한을 허용해 주세요."
+          : error.code === 2
+            ? "현재 위치를 확인할 수 없습니다. 기기의 위치 서비스를 켜고 다시 시도해 주세요."
+            : "위치 확인 시간이 초과되었습니다. 다시 시도해 주세요.";
+        window.alert(message);
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
   }
 
   // ---------------------------------------
@@ -181,6 +189,7 @@ export default function App() {
 
   const [startText, setStartText] = useState("");
   const [endText, setEndText] = useState("");
+  const [addressLookupNotice, setAddressLookupNotice] = useState<string | null>(null);
   // Bind lookup results to their coordinates so an old address never flashes for a new point.
   const [startLookup, setStartLookup] = useState<{ key: string; address: string | null } | null>(null);
   const [endLookup, setEndLookup] = useState<{ key: string; address: string | null } | null>(null);
@@ -193,8 +202,8 @@ export default function App() {
     const controller = new AbortController();
     const key = start.join(",");
     void lookupAddress(start, controller.signal)
-      .then(address => { if (!controller.signal.aborted) { setStartLookup({ key, address }); if (address) setStartText(value => value === formatCoordinate(start) ? address : value); } })
-      .catch(error => { if (!controller.signal.aborted) { console.warn("출발지 주소 조회:", error); setStartLookup({ key, address: null }); } });
+      .then(address => { if (!controller.signal.aborted) { setStartLookup({ key, address }); if (address) { setAddressLookupNotice(null); setStartText(value => value === formatCoordinate(start) ? address : value); } } })
+      .catch(error => { if (!controller.signal.aborted) { console.warn("출발지 주소 조회:", error); setAddressLookupNotice(error instanceof Error ? error.message : "주소 변환에 실패했습니다."); setStartLookup({ key, address: null }); } });
     return () => controller.abort();
   }, [start]);
 
@@ -203,8 +212,8 @@ export default function App() {
     const controller = new AbortController();
     const key = end.join(",");
     void lookupAddress(end, controller.signal)
-      .then(address => { if (!controller.signal.aborted) { setEndLookup({ key, address }); if (address) setEndText(value => value === formatCoordinate(end) ? address : value); } })
-      .catch(error => { if (!controller.signal.aborted) { console.warn("목적지 주소 조회:", error); setEndLookup({ key, address: null }); } });
+      .then(address => { if (!controller.signal.aborted) { setEndLookup({ key, address }); if (address) { setAddressLookupNotice(null); setEndText(value => value === formatCoordinate(end) ? address : value); } } })
+      .catch(error => { if (!controller.signal.aborted) { console.warn("목적지 주소 조회:", error); setAddressLookupNotice(error instanceof Error ? error.message : "주소 변환에 실패했습니다."); setEndLookup({ key, address: null }); } });
     return () => controller.abort();
   }, [end]);
 
@@ -684,10 +693,10 @@ export default function App() {
   // =======================================
 
   return (
-    <div className="flex h-dvh flex-col bg-white">
+    <div className="flex h-dvh flex-col bg-white soom-b2c-screen">
 
       {/* 기존 헤더 유지 */}
-      <header className="z-[1000] bg-white px-5 py-4 shadow-sm">
+      <header className="z-[1000] bg-white px-5 py-4 shadow-sm max-[760px]:hidden">
         <h1 className="text-xl font-bold text-green-700">
           숨길
         </h1>
@@ -698,8 +707,9 @@ export default function App() {
       </header>
 
       {/* 전체 높이 지도 + 접을 수 있는 설정 패널 */}
-      <main className="relative min-h-0 flex-1">
+      <main className="relative min-h-0 flex-1 soom-b2c-map-area">
         <MapView
+          mobileB2C
           start={start}
           end={end}
           routes={routes}
@@ -720,6 +730,7 @@ export default function App() {
           onCloseRiskNotice={closeRiskNotice}
           reportLocation={reportLocation}
           focusPoint={focusPoint}
+          addressLookupNotice={addressLookupNotice}
           selectionMode={selectionMode}
           startAddress={startAddress}
           endAddress={endAddress}
@@ -739,13 +750,13 @@ export default function App() {
 
         <button type="button" onClick={() => setShowControls(value => !value)}
           aria-expanded={showControls}
-          className="absolute left-3 top-[140px] max-[760px]:top-[240px] z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
+          className="absolute left-3 top-[140px] max-[760px]:hidden z-[700] rounded-xl border border-slate-200 bg-white/95 px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
           {showControls ? "패널 닫기 ×" : "경로 결과 · 제보 ☰"}
         </button>
 
       {/* 경로 설정과 제보 폼은 필요할 때만 열어서 지도를 가리지 않도록 함 */}
       {showControls && (
-      <section className="absolute left-3 top-[188px] max-[760px]:top-[288px] z-[700] max-h-[min(56dvh,calc(100%-206px))] w-[min(390px,calc(100%-24px))] max-[760px]:w-[min(390px,calc(100%-5.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
+      <section className="absolute left-3 top-[188px] max-[760px]:hidden z-[700] max-h-[min(56dvh,calc(100%-206px))] w-[min(390px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl">
 
         {/* 최단/회피 경로 결과와 흡연 제보 탭 */}
         <div className="mb-4 grid grid-cols-3 gap-1">
@@ -766,7 +777,10 @@ export default function App() {
         )}
 
         {pageMode === "safest" && (
-          <RouteResultPanel type="safest" route={routes.find(route => route.id !== "shortest")} />
+          <div className="space-y-3">
+            <RoutePanel avoidanceLevel={avoidanceLevel} onAvoidanceLevelChange={handleAvoidanceLevelChange} />
+            <RouteResultPanel type="safest" route={routes.find(route => route.id !== "shortest")} />
+          </div>
         )}
 
         {loading && <p role="status" className="mt-3 text-xs text-slate-600">경로 계산 중... {elapsedSeconds.toFixed(1)}초</p>}
@@ -813,6 +827,31 @@ export default function App() {
 
       </section>
       )}
+      <div className="hidden max-[760px]:block">
+        <MobileB2CSheet
+          pageMode={pageMode}
+          onTabChange={changePage}
+          routes={routes}
+          avoidanceLevel={avoidanceLevel}
+          onAvoidanceLevelChange={handleAvoidanceLevelChange}
+          loading={loading}
+          elapsedSeconds={elapsedSeconds}
+          searchError={!loading && searchStatus === "error"}
+          reportError={reportError}
+          reportContent={
+            <div className="space-y-3">
+              <ReportForm
+                location={reportLocation}
+                submitting={reportSubmitting}
+                onSubmit={handleCreateReport}
+                onSelectLocation={() => setReportNotice(null)}
+                onCancel={() => changePage("shortest")}
+              />
+              {reportNotice && <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-700">{reportNotice}</p>}
+            </div>
+          }
+        />
+      </div>
       </main>
     </div>
   );

@@ -95,7 +95,7 @@ export default function App() {
         onClick={() => setServiceMode(null)}
         aria-label="서비스 다시 선택"
         title="서비스 다시 선택"
-        className="absolute right-3 top-3 z-[1200] flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-xl font-bold text-gray-700 shadow hover:bg-gray-50"
+        className={`absolute right-3 top-3 z-[1200] flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-xl font-bold text-gray-700 shadow hover:bg-gray-50 ${serviceMode === "b2c" ? "max-[760px]:left-3 max-[760px]:right-auto max-[760px]:top-[136px] max-[760px]:h-9 max-[760px]:w-9" : ""}`}
       >
         ×
       </button>

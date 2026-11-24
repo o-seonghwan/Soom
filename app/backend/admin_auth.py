@@ -1,77 +1,56 @@
+"""Owner and approved administrator authentication via HTTPS HTTP Basic.
 
+The existing ADMIN_USERNAME / ADMIN_PASSWORD are the owner's credentials.
+New accounts may log in only after owner approval in PostgreSQL.
+"""
 import os
 import secrets
-
 from pathlib import Path
 
+import psycopg
 from dotenv import load_dotenv
-
 from fastapi import Depends, HTTPException
-from fastapi.security import (
-    HTTPBasic,
-    HTTPBasicCredentials,
-)
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from admin_accounts import authenticate_approved, rate_limit
 
-
-# =========================================
-# 1. 환경변수 로드
-# =========================================
-
-ENV_PATH = Path(__file__).resolve().parent / ".env"
-load_dotenv(ENV_PATH)
-
+load_dotenv(Path(__file__).resolve().parent / ".env")
 security = HTTPBasic(auto_error=False)
 
 
-# =========================================
-# 2. 관리자 인증
-# =========================================
-
-def require_admin(
-    credentials: HTTPBasicCredentials | None = Depends(
-        security
-    ),
-):
-    """
-    HTTP Basic 인증으로 관리자 계정 확인.
-    아이디와 비밀번호는 .env에서 읽는다.
-    """
-
-    expected_username = os.getenv("ADMIN_USERNAME", "")
+def owner_valid(username: str, password: str) -> bool:
+    expected_username = os.getenv("ADMIN_USERNAME", "").strip()
     expected_password = os.getenv("ADMIN_PASSWORD", "")
+    if not expected_username or not expected_password or expected_password == "CHANGE_ME":
+        return False
+    return (
+        secrets.compare_digest(username.encode("utf-8"), expected_username.encode("utf-8"))
+        and secrets.compare_digest(password.encode("utf-8"), expected_password.encode("utf-8"))
+    )
 
-    # 관리자 설정이 없는 경우
-    if (
-        not expected_username
-        or not expected_password
-        or expected_password == "CHANGE_ME"
-    ):
-        raise HTTPException(
-            status_code=503,
-            detail="관리자 계정이 설정되지 않았습니다.",
-        )
 
+def require_admin(credentials: HTTPBasicCredentials | None = Depends(security)) -> str:
     if credentials is None:
-        raise HTTPException(
-            status_code=401,
-            detail="관리자 로그인이 필요합니다.",
-        )
+        raise HTTPException(status_code=401, detail="관리자 로그인이 필요합니다.")
+    # Limit verification attempts without storing client IP addresses.
+    rate_limit("admin-login:" + credentials.username.casefold(), 30, 60)
+    if owner_valid(credentials.username, credentials.password):
+        return credentials.username
+    try:
+        if authenticate_approved(credentials.username, credentials.password):
+            return credentials.username
+    except psycopg.Error as error:
+        raise HTTPException(status_code=503, detail="관리자 인증 DB 연결에 실패했습니다.") from error
+    raise HTTPException(status_code=401, detail="아이디·비밀번호가 틀렸거나 아직 승인되지 않은 계정입니다.")
 
-    # 문자열 비교 시간을 일정하게 유지
-    username_ok = secrets.compare_digest(
-        credentials.username.encode("utf-8"),
-        expected_username.encode("utf-8"),
-    )
 
-    password_ok = secrets.compare_digest(
-        credentials.password.encode("utf-8"),
-        expected_password.encode("utf-8"),
-    )
-
-    if not (username_ok and password_ok):
-        raise HTTPException(
-            status_code=401,
-            detail="관리자 아이디 또는 비밀번호가 올바르지 않습니다.",
-        )
-
+def require_owner(credentials: HTTPBasicCredentials | None = Depends(security)) -> str:
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="제작자 로그인이 필요합니다.")
+    rate_limit("owner-login", 30, 60)
+    if not owner_valid(credentials.username, credentials.password):
+        raise HTTPException(status_code=403, detail="제작자 전용 기능입니다.")
     return credentials.username
+
+
+def owner_role(username: str) -> str:
+    return "owner" if username == os.getenv("ADMIN_USERNAME", "").strip() else "admin"

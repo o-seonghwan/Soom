@@ -15,6 +15,8 @@ SCHEMA_PATH = (
 )
 
 EXPECTED_TABLES = {
+    "admin_users",
+    "admin_audit_logs",
     "reports",
     "risk_snapshots",
     "risk_locations",
@@ -43,10 +45,12 @@ def initialize_database():
     schema_sql = SCHEMA_PATH.read_text(
         encoding="utf-8"
     )
+    admin_schema_sql = (BASE_DIR / "sql" / "002_admin_accounts.sql").read_text(encoding="utf-8")
 
     # 전체 스키마를 하나의 트랜잭션으로 실행
     with get_connection() as conn:
         conn.execute(schema_sql)
+        conn.execute(admin_schema_sql)
 
     # 생성 결과 확인
     with get_connection() as conn:
@@ -75,7 +79,7 @@ def initialize_database():
         )
 
     print()
-    print("13단계 초기 테이블 생성 완료")
+    print("초기 테이블 및 관리자 계정 테이블 생성 완료")
 
     for table in sorted(actual_tables):
         print(f" - {table}")
