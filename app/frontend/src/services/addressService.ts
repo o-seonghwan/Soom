@@ -4,7 +4,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 /** Display-only reverse geocoding; never change route snap coordinates. */
 export async function lookupAddress(point: Coordinate, signal?: AbortSignal): Promise<string | null> {
-  const url = new URL(`${API_BASE}/api/reverse-address`);
+  const url = new URL(`${API_BASE}/api/reverse-address`, window.location.origin);
   url.searchParams.set("lat", String(point[0]));
   url.searchParams.set("lng", String(point[1]));
   const response = await fetch(url.toString(), { signal });
