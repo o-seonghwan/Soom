@@ -842,6 +842,7 @@ export default function App() {
       <div className="hidden max-[760px]:block">
         <MobileB2CSheet
           key={mobileSheetSequence}
+          initialOpen={mobileSheetSequence > 0}
           pageMode={pageMode}
           onTabChange={changePage}
           routes={routes}
