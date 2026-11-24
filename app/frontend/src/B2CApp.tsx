@@ -91,6 +91,8 @@ export default function App() {
 
   const [pageMode, setPageMode] =
     useState<PageMode>("safest");
+  // Remount the mobile sheet at a map-friendly middle height after an address search.
+  const [mobileSheetSequence, setMobileSheetSequence] = useState(0);
 
   // Tab choice controls which searched route receives per-link cleanliness colors.
   // Keeping it separate from the report tab avoids resetting the route highlight.
@@ -478,6 +480,8 @@ export default function App() {
   function chooseAddress(mode: LocationMode, suggestion: AddressSuggestion) {
     if (searchInProgress.current) return;
     updateLocation(mode, [suggestion.lat, suggestion.lng], suggestion.address || suggestion.title);
+    setPageMode("safest");
+    setMobileSheetSequence(value => value + 1);
     if (mode === "start") setSelectionMode("end");
   }
 
@@ -491,6 +495,8 @@ export default function App() {
     const coordinate = parseCoordinate(text);
     if (coordinate) {
       updateLocation(mode, coordinate);
+      setPageMode("safest");
+      setMobileSheetSequence(value => value + 1);
       if (mode === "start") setSelectionMode("end");
       return;
     }
@@ -500,6 +506,8 @@ export default function App() {
       const current = mode === "start" ? latestStartText.current : latestEndText.current;
       if (current.trim() !== text) return;
       updateLocation(mode, point, text);
+      setPageMode("safest");
+      setMobileSheetSequence(value => value + 1);
       if (mode === "start") setSelectionMode("end");
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "주소를 확인할 수 없습니다.");
@@ -556,6 +564,10 @@ export default function App() {
 
   async function handleSearch(level: RouteRequest["avoidanceLevel"] = avoidanceLevel, auto = false) {
     if (!start || !end) return;
+    if (!auto) {
+      setPageMode("safest");
+      setMobileSheetSequence(value => value + 1);
+    }
 
     // A new slider setting supersedes any pending or in-flight route request.
     if (avoidanceSearchTimer.current !== null) {
@@ -829,6 +841,7 @@ export default function App() {
       )}
       <div className="hidden max-[760px]:block">
         <MobileB2CSheet
+          key={mobileSheetSequence}
           pageMode={pageMode}
           onTabChange={changePage}
           routes={routes}
