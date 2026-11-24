@@ -6,21 +6,10 @@ import B2GDashboard from "./B2GDashboard";
 
 type ServiceMode = "b2c" | "b2g" | null;
 
-const MOBILE_SPLASH_IMAGES = [
-  "/soom-mobile-splash.webp",
-  "/soom-mobile-splash-01.webp",
-  "/soom-mobile-splash-11.webp",
-  "/soom-mobile-splash-21.webp",
-] as const;
-
 export default function App() {
   const [serviceMode, setServiceMode] =
     useState<ServiceMode>(null);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 760px)").matches);
-  // Choose once on mount, so re-renders do not change the displayed splash.
-  const [mobileSplashSrc] = useState(() =>
-    MOBILE_SPLASH_IMAGES[Math.floor(Math.random() * MOBILE_SPLASH_IMAGES.length)]
-  );
   // Only the first mobile app entry shows the splash; returning to service selection does not.
   const [showMobileSplash, setShowMobileSplash] = useState(
     () => window.matchMedia("(max-width: 760px)").matches
@@ -49,9 +38,9 @@ export default function App() {
         style={{ backgroundColor: "#ecfaf4" }}
       >
         <img
-          src={mobileSplashSrc}
+          src="/soom-mobile-splash.webp"
           alt="숨길의 수미, 구리, 당당 캐릭터가 위치 아이콘 주변에 모인 시작 화면"
-          className="h-full w-full object-contain"
+          className="h-full w-full scale-[1.3] object-contain"
           fetchPriority="high"
         />
       </main>
