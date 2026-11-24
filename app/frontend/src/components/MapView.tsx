@@ -93,11 +93,17 @@ interface MapViewProps {
 // 지도 클릭 이벤트
 function MapClickHandler({
   onMapClick,
+  panOnClick,
 }: {
   onMapClick: (point: Coordinate) => void;
+  panOnClick: boolean;
 }) {
-  useMapEvents({
+  const map = useMapEvents({
     click(event) {
+      if (panOnClick) {
+        // Keep the current zoom and smoothly center the chosen location.
+        map.panTo(event.latlng, { animate: true, duration: 0.65, easeLinearity: 0.25 });
+      }
       onMapClick([
         event.latlng.lat,
         event.latlng.lng,
@@ -387,7 +393,7 @@ export default function MapView({
         {audience === "b2g" && <ResizeB2GMap />}
 
         {/* 지도 입력 및 이동 */}
-        <MapClickHandler onMapClick={onMapClick} />
+        <MapClickHandler onMapClick={onMapClick} panOnClick={audience === "b2c"} />
         <MapFocus point={focusPoint} mobile={mobileB2C} />
         <FitRoutes routes={fitBoundsRoutes} />
 
