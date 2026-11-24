@@ -13,15 +13,20 @@ from risk_provider import get_risk_snapshot
 
 class DistanceBandsTests(unittest.TestCase):
     def test_boundaries(self):
-        self.assertEqual([risk_multiplier(d) for d in (0, 10, 10.01, 15, 15.01, 21, 21.01)],
-                         [1, 1, .65, .65, .30, .30, 0])
+        # The middle and outer bands use mean PM2.5 increments relative to 6 m.
+        middle, outer = 3.82 / 12.90, 1.83 / 12.90
+        for distance, expected in zip((0, 10, 10.01, 15, 15.01, 21, 21.01),
+                                      (1, 1, middle, middle, outer, outer, 0)):
+            with self.subTest(distance=distance):
+                self.assertAlmostEqual(risk_multiplier(distance), expected)
 
     def test_risk_and_clean_index(self):
-        expected = [(80, 20), (52, 48), (24, 76), (0, 100)]
-        for distance, pair in zip((5, 11, 17, 22), expected):
-            risk = effective_risk(80, distance)
-            self.assertAlmostEqual(risk, pair[0])
-            self.assertAlmostEqual(cleanliness_index(risk), pair[1])
+        expected_risks = (80, 80 * 3.82 / 12.90, 80 * 1.83 / 12.90, 0)
+        for distance, expected_risk in zip((5, 11, 17, 22), expected_risks):
+            with self.subTest(distance=distance):
+                risk = effective_risk(80, distance)
+                self.assertAlmostEqual(risk, expected_risk)
+                self.assertAlmostEqual(cleanliness_index(risk), 100 - expected_risk)
 
     def test_invalid_input(self):
         for value in (-1, float("nan"), float("inf")):
