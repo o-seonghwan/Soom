@@ -10,10 +10,15 @@ interface Props {
 export default function RoutePanel({ avoidanceLevel, onAvoidanceLevelChange }: Props) {
   const id = useId();
   const [draft, setDraft] = useState(avoidanceLevel);
+  const [previousLevel, setPreviousLevel] = useState(avoidanceLevel);
   const lastCommitted = useRef(avoidanceLevel);
 
-  useEffect(() => {
+  if (previousLevel !== avoidanceLevel) {
+    setPreviousLevel(avoidanceLevel);
     setDraft(avoidanceLevel);
+  }
+
+  useEffect(() => {
     lastCommitted.current = avoidanceLevel;
   }, [avoidanceLevel]);
 
