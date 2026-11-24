@@ -522,17 +522,7 @@ export default function AdminDashboard({
             새로고침
           </button>
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            disabled={
-              busy ||
-              updatingId !== null
-            }
-            className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50"
-          >
-            로그아웃
-          </button>
+
         </div>
       </div>
 
@@ -582,7 +572,7 @@ export default function AdminDashboard({
             key={item.label}
             className="rounded-lg border bg-gray-50 p-3"
           >
-            <p className="text-xs text-gray-500">
+            <p className="whitespace-nowrap text-xs text-gray-500">
               {item.label}
             </p>
 
