@@ -22,7 +22,13 @@ def _key_context():
     return {"domain": host}, {"Referer": host.rstrip("/") + "/"}
 
 
+class VWorldAuthError(requests.RequestException):
+    """A domain/key error; no credential is included in the exception."""
+
+
 def _validated_response(response):
+    if response.status_code in (401, 403):
+        raise VWorldAuthError("VWorld 인증이 거부됐습니다. VWORLD_API_KEY 및 VWORLD_DOMAIN을 확인하세요.")
     response.raise_for_status()
     body = response.json().get("response", {})
     status = body.get("status")
@@ -31,7 +37,7 @@ def _validated_response(response):
     error = body.get("error") or {}
     code = str(error.get("code") or "").upper()
     if code in {"INVALID_KEY", "EXPIRE_KEY", "INVALID_DOMAIN", "INVALID_ACCESS"}:
-        raise requests.RequestException(
+        raise VWorldAuthError(
             "VWorld API 인증 실패 (" + code + "). 키의 주소/검색 API 사용 권한과 VWORLD_DOMAIN 등록 도메인을 확인하세요."
         )
     raise requests.RequestException(
