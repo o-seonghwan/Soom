@@ -1,0 +1,48 @@
+name: VWorld live production check
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/vworld-live-check-20261124.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check deployed API calls (no secrets)
+        run: |
+          python - <<'PY'
+          import json
+          import urllib.request
+          from urllib.parse import urlencode
+          from urllib.error import HTTPError, URLError
+          base="https://soom-backend-production.up.railway.app"
+          checks=[
+            ("/api/health",{}),
+            ("/api/search-addresses",{"q":"강남역"}),
+            ("/api/geocode-address",{"q":"서울특별시 강남구 테헤란로 124"}),
+            ("/api/reverse-address",{"lat":37.498417,"lng":127.028292}),
+          ]
+          for path,params in checks:
+              url=base+path+("?" + urlencode(params) if params else "")
+              try:
+                  with urllib.request.urlopen(url,timeout=20) as response:
+                      code=response.status
+                      payload=response.read(4096).decode()
+              except HTTPError as err:
+                  code=err.code
+                  payload=err.read(4096).decode()
+              except URLError as err:
+                  print("RESULT",path,"NETWORK_ERROR",type(err.reason).__name__)
+                  continue
+              try: 
+                  data=json.loads(payload)
+              except ValueError:
+                  data={}
+              detail=data.get("detail")
+              result=data.get("suggestions")
+              print("RESULT",path,"HTTP",code,"detail",str(detail)[:150],
+                    "address_present",bool(data.get("address")),
+                    "suggestion_count",len(result) if isinstance(result,list) else "NA")
+          PY
