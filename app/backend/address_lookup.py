@@ -26,6 +26,16 @@ class VWorldAuthError(requests.RequestException):
     """A domain/key error; no credential is included in the exception."""
 
 
+class VWorldProviderError(requests.RequestException):
+    """A non-credential VWorld API error, with only a safe provider code."""
+
+    def __init__(self, code: str):
+        self.code = code if code and len(code) <= 40 and all(
+            c.isascii() and (c.isupper() or c.isdigit() or c == "_") for c in code
+        ) else "UNKNOWN"
+        super().__init__("VWorld 응답 오류. 공급자 오류 코드를 확인하세요.")
+
+
 def _validated_response(response):
     if response.status_code in (401, 403):
         raise VWorldAuthError("VWorld 인증이 거부됐습니다. VWORLD_API_KEY 및 VWORLD_DOMAIN을 확인하세요.")
@@ -40,9 +50,7 @@ def _validated_response(response):
         raise VWorldAuthError(
             "VWorld API 인증 실패 (" + code + "). 키의 주소/검색 API 사용 권한과 VWORLD_DOMAIN 등록 도메인을 확인하세요."
         )
-    raise requests.RequestException(
-        "VWorld API 요청 실패. 주소 API 인증키, 등록 도메인 및 서비스 상태를 확인하세요."
-    )
+    raise VWorldProviderError(code)
 
 
 
