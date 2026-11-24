@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import B2CApp from "./B2CApp";
 import B2GDashboard from "./B2GDashboard";
@@ -9,6 +9,14 @@ type ServiceMode = "b2c" | "b2g" | null;
 export default function App() {
   const [serviceMode, setServiceMode] =
     useState<ServiceMode>(null);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 760px)").matches);
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 760px)");
+    const update = () => setIsMobile(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
 
   // 최초 서비스 선택 화면
   if (serviceMode === null) {
@@ -55,8 +63,10 @@ export default function App() {
             {/* B2G 지자체 */}
             <button
               type="button"
-              onClick={() => setServiceMode("b2g")}
-              className="rounded-2xl border-2 border-slate-200 bg-white p-8 text-left shadow-sm transition hover:border-slate-500 hover:shadow-md"
+              onClick={() => { if (!isMobile) setServiceMode("b2g"); }}
+              disabled={isMobile}
+              aria-label={isMobile ? "지자체 서비스는 데스크톱에서 이용할 수 있습니다" : "지자체 서비스로 입장"}
+              className="rounded-2xl border-2 border-slate-200 bg-white p-8 text-left shadow-sm transition hover:border-slate-500 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
             >
               <p className="text-sm font-bold text-slate-600">
                 B2G · 지자체 및 관리자
@@ -74,7 +84,7 @@ export default function App() {
               </p>
 
               <div className="mt-6 rounded-lg bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
-                지자체 서비스로 입장
+                {isMobile ? "모바일에서는 이용할 수 없습니다 · PC에서 접속해주세요" : "지자체 서비스로 입장"}
               </div>
             </button>
           </div>
@@ -102,6 +112,15 @@ export default function App() {
 
       {serviceMode === "b2c" ? (
         <B2CApp />
+      ) : isMobile ? (
+        <main className="flex h-full items-center justify-center bg-slate-50 px-6 text-center">
+          <div className="max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+            <h1 className="text-xl font-bold text-slate-800">숨길 B2G · 모바일 이용 제한</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              관리자 대시보드는 넓은 화면이 필요합니다. 데스크톱에서 이용해주세요.
+            </p>
+          </div>
+        </main>
       ) : (
         <B2GDashboard />
       )}
