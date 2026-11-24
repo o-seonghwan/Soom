@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { RouteRequest } from "../types/route";
 
 interface Props {
@@ -6,18 +6,36 @@ interface Props {
   onAvoidanceLevelChange: (value: RouteRequest["avoidanceLevel"]) => void;
 }
 
-/** Shared B2C slider style for desktop and mobile. */
+/** Shared B2C appearance, preserving update-on-release routing behavior. */
 export default function RoutePanel({ avoidanceLevel, onAvoidanceLevelChange }: Props) {
   const id = useId();
+  const [draft, setDraft] = useState(avoidanceLevel);
+  const lastCommitted = useRef(avoidanceLevel);
+
+  useEffect(() => {
+    setDraft(avoidanceLevel);
+    lastCommitted.current = avoidanceLevel;
+  }, [avoidanceLevel]);
+
+  function commit(value: number) {
+    const next = Math.max(0, Math.min(100, Math.round(value / 20) * 20));
+    if (next === lastCommitted.current) return;
+    lastCommitted.current = next;
+    onAvoidanceLevelChange(next);
+  }
+
   return (
     <div className="rounded-xl bg-slate-50 px-3 py-2.5">
       <div className="mb-1.5 flex justify-between text-xs font-bold text-slate-800">
         <label htmlFor={id}>회피 강도</label>
-        <output htmlFor={id} className="text-emerald-700">{avoidanceLevel}%</output>
+        <output htmlFor={id} className="text-emerald-700">{draft}%</output>
       </div>
       <input id={id} aria-label="간접흡연 회피 강도" type="range"
-        min={0} max={100} step={20} value={avoidanceLevel}
-        onChange={event => onAvoidanceLevelChange(Number(event.currentTarget.value))}
+        min={0} max={100} step={20} value={draft}
+        onChange={event => setDraft(Number(event.currentTarget.value))}
+        onPointerUp={event => commit(Number(event.currentTarget.value))}
+        onKeyUp={event => commit(Number(event.currentTarget.value))}
+        onBlur={event => commit(Number(event.currentTarget.value))}
         className="w-full accent-emerald-500"
       />
       <div className="mt-1 flex justify-between text-[10px] text-slate-400">
