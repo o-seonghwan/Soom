@@ -56,7 +56,11 @@ def _point(row, line_number):
 
 def load_dbscan_sites():
     configured = os.environ.get("LUNG_DBSCAN_RESULTS_DIR", "").strip()
-    root = Path(configured).expanduser().resolve() if configured else RESULT_DIR
+    volume = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
+    # The production Docker image ships only app/backend. Offline outputs
+    # must be uploaded into the persistent Railway volume, not expected in notebooks.
+    root = (Path(configured).expanduser().resolve() if configured else
+            Path(volume) if volume else RESULT_DIR)
     clusters_raw = _rows(root / FILES["clusters"], ("군집", "위도", "경도", "적발건수", "대표장소", "판정"))
     candidates_raw = _rows(root / FILES["candidates"], ("군집", "순위", "위도", "경도", "접근거리m(보행)", "권장 형태"))
     clusters = []
