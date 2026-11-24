@@ -1,5 +1,6 @@
 
 from contextlib import asynccontextmanager
+import logging
 from typing import Literal
 from uuid import UUID
 
@@ -301,6 +302,11 @@ def reverse_address_api(lat: float, lng: float):
     except VWorldAuthError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except requests.RequestException as error:
+        logging.getLogger("soom.vworld").warning(
+            "VWorld request failure: category=%s provider_code=%s http_status=%s",
+            type(error).__name__, getattr(error, "code", None),
+            getattr(getattr(error, "response", None), "status_code", None),
+        )
         raise HTTPException(status_code=503, detail="주소 조회 서비스 연결에 실패했습니다.") from error
 
 
@@ -315,6 +321,11 @@ def search_addresses_api(q: str):
     except VWorldAuthError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except requests.RequestException as error:
+        logging.getLogger("soom.vworld").warning(
+            "VWorld request failure: category=%s provider_code=%s http_status=%s",
+            type(error).__name__, getattr(error, "code", None),
+            getattr(getattr(error, "response", None), "status_code", None),
+        )
         raise HTTPException(status_code=503, detail="주소 검색 서비스에 연결하지 못했습니다.") from error
 
 
@@ -331,6 +342,11 @@ def geocode_address_api(q: str):
     except VWorldAuthError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except requests.RequestException as error:
+        logging.getLogger("soom.vworld").warning(
+            "VWorld request failure: category=%s provider_code=%s http_status=%s",
+            type(error).__name__, getattr(error, "code", None),
+            getattr(getattr(error, "response", None), "status_code", None),
+        )
         raise HTTPException(status_code=503, detail="주소 변환 서비스에 연결하지 못했습니다.") from error
 
 
