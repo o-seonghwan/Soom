@@ -92,3 +92,51 @@ body {
     font-size: 8px;
   }
 }
+
+/* Mobile B2C is a full-viewport map application, not a scrolling document.
+   Allow vertical scrolling within the bottom sheet and search results only. */
+@media (max-width: 760px) {
+  html:has(.soom-b2c-screen),
+  body:has(.soom-b2c-screen),
+  #root:has(.soom-b2c-screen) {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .soom-b2c-screen {
+    position: fixed;
+    inset: 0;
+    height: 100dvh;
+    width: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .soom-b2c-map-area,
+  .soom-mobile-map {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
+
+  .soom-mobile-map .leaflet-container {
+    touch-action: none;
+    overscroll-behavior: contain;
+  }
+
+  .soom-mobile-map input,
+  .soom-mobile-map button {
+    touch-action: manipulation;
+  }
+
+  [aria-label="모바일 경로 및 제보 패널"] {
+    overscroll-behavior: contain;
+  }
+
+  [aria-label="모바일 경로 및 제보 패널"] > div:last-child {
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
